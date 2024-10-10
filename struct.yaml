@@ -1,0 +1,15 @@
+leader: 
+  - id: leader1 #color_x_y (?)
+    x: 11
+    y: 12
+    color: red
+    internal_nodes: [(0,0), (0,1), (0,2)]
+    boundary_nodes: [(1,1), (1,2)]
+    neighbour_leaders: [leader2, leader3]
+  - id: leader2
+
+node:
+  - x: 0
+    y: 0
+    next_node: (1,1)
+
