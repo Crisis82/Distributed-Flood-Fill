@@ -1,0 +1,30 @@
+IMG = [N][M]
+G = new_graph()
+indexes = [-1,0,1]
+
+BUILD_RETE():
+  for(y=0, y<M, y++):
+    for(x=0, x<N, x++):
+      node = new_leader(x, y, color, [], server_id)
+      G.add(G.root(), node)
+      adj = []
+      BUILD_CLUSTER(x, y, node, adj)
+
+BUILD_CLUSTER(x, y, node, adj):
+  color = IMG[x][y]
+  for a in indexes:
+    x_1 = x+a
+    if x_1>=0 and x_1<N:
+      for b in indexes:
+        y_1 = y+b
+        if y_1>=0 and y_1<M:
+          if color == IMG[x_1][y_1]:
+            node_2 = new_node(x,y,node)     % (x,y,next_node)
+            G.add(node, node_2)
+            adj.add((x_1,y_1,node_2))
+
+  if adj.length() != 0:
+    (x,y,node) = adj.pop()
+    BUILD_CLUSTER(x,y,node,adj)
+
+
