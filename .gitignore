@@ -31,3 +31,5 @@ _checkouts/
 .cache
 .replit
 *.replit
+*.nix
+*replit.*
