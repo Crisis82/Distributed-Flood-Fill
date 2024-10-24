@@ -6,6 +6,10 @@
 % \usepackage[T1]{fontenc}
 % \usepackage[utf8]{inputenc}
 
+%hypenation
+%\usepackage[english]{babel}
+\usepackage[italian]{babel}
+
 \usepackage[tmargin=3cm,rmargin=1in,lmargin=1in,margin=0.85in,bmargin=3cm]{geometry}
 \usepackage{amsmath,amsfonts,amsthm,amssymb,mathtools}
 \usepackage{diffcoeff} 
@@ -46,9 +50,15 @@
 \pgfplotsset{compat=1.18}
 \usepackage{xpatch}% to patch \cancel
 \usepackage{forest}
+\usepackage{soul}
+\usepackage{subcaption}
+\usepackage[bottom]{footmisc}
+\usepackage{graphbox}
 
 % \usepackage{graphicx}
 % \graphicspath{ {./images/} }
+
+\algdef{SE}[DOWHILE]{Do}{DoWhile}{\algorithmicdo}[1]{\algorithmicwhile\ #1}%
 
 \makeatletter
 \xpatchcmd{\canto@vector}{\vector}{\line}{}{}
