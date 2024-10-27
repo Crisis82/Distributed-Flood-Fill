@@ -4,12 +4,10 @@
 
 %% Creation of a node
 create_node({X, Y}, Color, StartSystemPid) ->
-    %% Create the leaderID as a formatted string "X_Y"
-    LeaderID = io_lib:format("~p_~p", [X, Y]),
-    %% Initialize the node with leaderID set to itself
-    Pid = spawn(fun() -> node_loop(X, Y, Color, StartSystemPid, false, LeaderID) end),
-    io:format("Node (~p, ~p) created with color: ~p, PID: ~p, LeaderID: ~s~n", [X, Y, Color, Pid, LeaderID]),
+    Pid = spawn(fun() -> node_loop(X, Y, Color, StartSystemPid, false, self()) end),
+    io:format("Node (~p, ~p) created with color: ~p, PID: ~p~n", [X, Y, Color, Pid]),
     {X, Y, Pid}.
+
 
 %% Main loop of the node
 node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID) ->
@@ -32,7 +30,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
                 FromPid ! {self(), node_already_visited},
                 node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
             true ->
-                io:format("Node (~p, ~p) receives setup_server_request, not visited, starting propagation of my leaderID: ~s.~n", [X, Y, LeaderID]),
+                io:format("Node (~p, ~p) receives setup_server_request, not visited, starting propagation of my leaderID: ~p.~n", [X, Y, LeaderID]),
                 UpdatedVisited = true,
                 %% Start propagation and indicate that this node is the initiator
                 ServerPid = FromPid,
@@ -59,14 +57,78 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
                 node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors)
             end;
 
+
+
+        %% Handle start_phase2 from server (leader initiation in Phase 2)
+        {start_phase2, NodePIDs, ServerPid} ->
+            io:format("Leader Node (~p, ~p) starting Phase 2.~n", [X, Y]),
+
+            %% Process own adjacent clusters first
+            io:format("Leader Node (~p, ~p) processing own adjacent nodes.~n", [X, Y]),
+            lists:foreach(fun(NeighborPid) ->
+                NeighborPid ! {get_leaderID, self()}
+            end, Neighbors),
+            AdjacentClustersSelf = collect_adjacent_clusters(Neighbors, [], LeaderID, Color, X, Y),
+
+            %% Send start_phase2_node to other nodes in the cluster
+            NodePIDsFiltered = lists:filter(fun(NodePID) -> NodePID =/= self() end, NodePIDs),
+            lists:foreach(fun(NodePID) ->
+                io:format("Leader Node (~p, ~p) - ~p sends message to ~p.~n", [X, Y, self(), NodePID]),
+                NodePID ! {start_phase2_node, self()}
+            end, NodePIDsFiltered),
+
+            %% Collect adjacent clusters from nodes
+            AdjacentClustersOthers = collect_adjacent_clusters_from_nodes(NodePIDsFiltered, []),
+
+            %% Combine own adjacent clusters with those from other nodes
+            AllAdjacentClusters = lists:usort(lists:append(AdjacentClustersSelf, AdjacentClustersOthers)),
+
+            %% Send collected adjacent clusters back to the server
+            io:format("Leader Node (~p, ~p) sending adjacent clusters ~p to server.~n", [X, Y, AllAdjacentClusters]),
+            ServerPid ! {self(), phase2_complete, LeaderID, AllAdjacentClusters},
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+
+
+
+
+
+
+
+
+        %% Handle start_phase2_node message from leader to nodes (nodes in cluster Phase 2)
+        {start_phase2_node, LeaderPid} ->
+            io:format("Node (~p, ~p) in cluster starting Phase 2 neighbor check.~n", [X, Y]),
+            lists:foreach(fun(NeighborPid) ->
+                NeighborPid ! {get_leaderID, self()}
+            end, Neighbors),
+            %% Collect adjacent clusters from neighbors
+            AdjacentClusters = collect_adjacent_clusters(Neighbors, [], LeaderID, Color, X, Y),
+            UniqueAdjacentClusters = lists:usort(AdjacentClusters),
+            io:format("Node (~p, ~p) sending adjacent clusters ~p to Leader.~n", [X, Y, UniqueAdjacentClusters]),
+            LeaderPid ! {adjacent_clusters_info, self(), UniqueAdjacentClusters},
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+
+        %% Handle get_leaderID requests from neighbors in Phase 2
+        {get_leaderID, FromPid} ->
+            FromPid ! {leaderID_info, self(), LeaderID, Color},
+            io:format("Node (~p, ~p) responding with leaderID ~p and color ~p to ~p~n", [X, Y, LeaderID, Color, FromPid]),
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+
         _Other ->
             io:format("Node (~p, ~p) received an unhandled message.~n", [X, Y]),
             node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors)
     end.
 
+
+
+
+
+
+
+
 %% Function to propagate and manage the cascade
 node_loop_propagate(X, Y, Color, StartSystemPid, Visited, Neighbors, PropagatedLeaderID, FromPid, InitiatorFlag) ->
-    io:format("Node (~p, ~p) is propagating as leader with ID: ~s and color: ~p.~n", [X, Y, PropagatedLeaderID, Color]),
+    io:format("Node (~p, ~p) is propagating as leader with ID: ~p and color: ~p.~n", [X, Y, PropagatedLeaderID, Color]),
 
     %% Exclude FromPid from Neighbors using =/=
     NeighborsToSend = [N || N <- Neighbors, N =/= FromPid],
@@ -74,7 +136,7 @@ node_loop_propagate(X, Y, Color, StartSystemPid, Visited, Neighbors, PropagatedL
 
     %% Send setup_node_request to neighbors including the leaderID
     lists:foreach(fun(NeighborPid) ->
-        io:format("Node (~p, ~p) is propagating leaderID: ~s and color: ~p, towards ~p.~n",
+        io:format("Node (~p, ~p) is propagating leaderID: ~p and color: ~p, towards ~p.~n",
                   [X, Y, PropagatedLeaderID, Color, NeighborPid]),
         NeighborPid ! {setup_node_request, Color, PropagatedLeaderID, self()}
     end, NeighborsToSend),
@@ -159,4 +221,37 @@ wait_for_ack_from_neighbors(NeighborsToWaitFor, AccumulatedPIDs, X, Y, Color, St
             io:format("Timeout while waiting for ACKs from neighbors: ~p~n", [NeighborsToWaitFor]),
             {ok, AccumulatedPIDs}
         end
+    end.
+
+%% Function to collect adjacent clusters for Phase 2
+collect_adjacent_clusters([], AdjacentClusters, _OwnLeaderID, _Color, _X, _Y) ->
+    AdjacentClusters;
+collect_adjacent_clusters(NeighborsToWaitFor, AdjacentClusters, OwnLeaderID, Color, X, Y) ->
+    receive
+        {leaderID_info, FromPid, NeighborLeaderID, NeighborColor} ->
+            RemainingNeighbors = lists:delete(FromPid, NeighborsToWaitFor),
+            NewAdjacentClusters = if NeighborLeaderID =/= OwnLeaderID ->
+                                      [{NeighborLeaderID, NeighborColor} | AdjacentClusters];
+                                  true ->
+                                      AdjacentClusters
+                                  end,
+            collect_adjacent_clusters(RemainingNeighbors, NewAdjacentClusters, OwnLeaderID, Color, X, Y);
+        {get_leaderID, FromPid} ->
+            FromPid ! {leaderID_info, self(), OwnLeaderID, Color},
+            collect_adjacent_clusters(NeighborsToWaitFor, AdjacentClusters, OwnLeaderID, Color, X, Y);
+        _Other ->
+            collect_adjacent_clusters(NeighborsToWaitFor, AdjacentClusters, OwnLeaderID, Color, X, Y)
+    after 5000 ->
+        AdjacentClusters
+    end.
+
+%% Leader collects adjacent clusters from nodes in Phase 2
+collect_adjacent_clusters_from_nodes([], AccumulatedAdjacentClusters) ->
+    lists:usort(AccumulatedAdjacentClusters);
+collect_adjacent_clusters_from_nodes(NodePIDs, AccumulatedAdjacentClusters) ->
+    receive
+        {adjacent_clusters_info, FromPid, NodeAdjacentClusters} ->
+            RemainingNodes = lists:delete(FromPid, NodePIDs),
+            NewAccumulatedAdjacentClusters = lists:append(AccumulatedAdjacentClusters, NodeAdjacentClusters),
+            collect_adjacent_clusters_from_nodes(RemainingNodes, NewAccumulatedAdjacentClusters)
     end.
