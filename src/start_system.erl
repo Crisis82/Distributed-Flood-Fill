@@ -14,17 +14,32 @@ start() ->
     DimStrings = binary:split(DimBinary, [<<"\n">>], [global, trim]),
     [N, M] = [list_to_integer(binary_to_list(X)) || X <- DimStrings],
 
-    %% Lettura dei colori
-    io:format("Sono start_system e leggo colori.~n"),
-    {ok, ColorsBinary} = file:read_file("colors.txt"),
-    Colors = lists:map(
-        fun binary_to_list/1, binary:split(ColorsBinary, [<<"\n">>], [global, trim])
-    ),
+    %% OLD METHOD using a matrix of colors
+
+    %% %% Lettura dei colori
+    %% io:format("Sono start_system e assegno dei colori random.~n"),
+    %% %%{ok, ColorsBinary} = file:read_file("colors.txt"),
+    %% %% Colors = lists:map(
+    %% %%     fun binary_to_list/1, binary:split(ColorsBinary, [<<"\n">>], [global, trim])
+    %% %% ),
+    %% Palette = [red, green, blue, yellow, orange, purple, pink, brown, black, white],
+    %% L = length(Palette),
+    %% Colors = [[lists:nth(rand:uniform(L), Palette) || _ <- lists:seq(1, N)] || _ <- lists:seq(1, M)],
+
+    %% %% Creazione dei nodi
+    %% io:format("Sono start_system e inizio a creare nodi.~n"),
+    %% Nodes = [
+    %%     {X, Y, node:create_node({X, Y}, lists:nth(Y, lists:nth(X, Colors)), self())}
+    %%  || X <- lists:seq(1, N), Y <- lists:seq(1, M)
+    %% ],
+    %% io:format("Sono start_system e ho finito di creare nodi.~n"),
 
     %% Creazione dei nodi
     io:format("Sono start_system e inizio a creare nodi.~n"),
+    Palette = [red, green, blue, yellow, orange, purple, pink, brown, black, white],
+    L = length(Palette),
     Nodes = [
-        {X, Y, node:create_node({X, Y}, lists:nth(Y, lists:nth(X, Colors)), self())}
+        {X, Y, node:create_node({X, Y}, lists:nth(rand:uniform(L), Palette), self())}
      || X <- lists:seq(1, N), Y <- lists:seq(1, M)
     ],
     io:format("Sono start_system e ho finito di creare nodi.~n"),
