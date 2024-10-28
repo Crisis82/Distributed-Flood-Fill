@@ -1,6 +1,5 @@
-%% server.erl
 -module(server).
--export([start_server/0, server_loop/3, log_operation/1, start_phase2_for_all_leaders/2]).
+-export([start_server/0, server_loop/3, log_operation/1, start_phase2_for_all_leaders/2, save_leader_configuration_csv/1]).
 
 start_server() ->
     log_operation("Server started."),
@@ -54,6 +53,36 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
             server_loop(Nodes, ProcessedNodes, LeadersData)
     end.
 
+%% Scrivi i dati dei leader in formato CSV
+save_leader_configuration_csv(LeadersData) ->
+    {ok, File} = file:open("leader_configuration.csv", [write]),
+    file:write(File, "leader_pid,color,nodes,adjacent_clusters\n"),
+    maps:foreach(fun(Key, Value) ->
+        LeaderPidStr = pid_to_string(Key),
+        Color = atom_to_list(maps:get(color, Value)),
+        Nodes = lists:map(fun pid_to_string/1, maps:get(nodes, Value)),
+        NodesStr = string:join(Nodes, "|"),
+        AdjacentClusters = lists:map(
+            fun({Pid, AdjColor}) ->
+                "{" ++ pid_to_string(Pid) ++ "," ++ atom_to_list(AdjColor) ++ "}"
+            end,
+            maps:get(adjacent_clusters, Value, [])
+        ),
+        AdjacentClustersStr = string:join(AdjacentClusters, "|"),
+        Line = LeaderPidStr ++ "," ++ Color ++ "," ++ NodesStr ++ "," ++ AdjacentClustersStr ++ "\n",
+        file:write(File, Line)
+    end, LeadersData),
+    file:close(File),
+    io:format("Configurazione finale dei leader salvata su leader_configuration.csv~n").
+
+
+
+
+
+%% Funzione per convertire un PID in una stringa
+pid_to_string(Pid) ->
+    lists:flatten(io_lib:format("~p", [Pid])).
+
 %% Function to log all server operations
 log_operation(Message) ->
     {ok, File} = file:open("server_log.txt", [append]),
@@ -68,6 +97,8 @@ start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
         [] ->
             io:format("Phase 2 completed. All leaders have been processed.~n"),
             io:format("Final Overlay Network Data~n~p~n", [LeadersData]),
+            %% Salva la configurazione finale dei leader in JSON
+            save_leader_configuration_csv(LeadersData),
             %% Notifica il server loop che la fase 2 è completa
             self() ! phase2_done;
         [LeaderPid | _] ->
@@ -89,4 +120,3 @@ start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
                 start_phase2_for_all_leaders(LeadersData, ProcessedLeaders)
             end
     end.
-

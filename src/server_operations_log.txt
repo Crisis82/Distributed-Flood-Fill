@@ -1,0 +1,387 @@
+[{{2024,10,27},{13,53,18}}] [server] Server started.
+[{{2024,10,27},{13,53,18}}] [server] Received request to start node setup.
+[{{2024,10,27},{13,53,18}}] [<0.109.0>] Node <0.109.0> has completed setup with nodes: [<0.117.0>,<0.118.0>,<0.119.0>,
+                                                <0.112.0>,<0.120.0>,<0.111.0>,
+                                                <0.110.0>,<0.109.0>]
+[{{2024,10,27},{13,53,18}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,18}}] [<0.110.0>] Node <0.110.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.111.0>] Node <0.111.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.112.0>] Node <0.112.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.113.0>] Node <0.113.0> has completed setup with nodes: [<0.121.0>,<0.122.0>,<0.116.0>,
+                                                <0.115.0>,<0.114.0>,<0.113.0>]
+[{{2024,10,27},{13,53,18}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,18}}] [<0.114.0>] Node <0.114.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.115.0>] Node <0.115.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.116.0>] Node <0.116.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.117.0>] Node <0.117.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.118.0>] Node <0.118.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.119.0>] Node <0.119.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.120.0>] Node <0.120.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.121.0>] Node <0.121.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.122.0>] Node <0.122.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.123.0>] Node <0.123.0> has completed setup with nodes: [<0.124.0>,<0.123.0>]
+[{{2024,10,27},{13,53,18}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,18}}] [<0.124.0>] Node <0.124.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.125.0>] Node <0.125.0> has completed setup with nodes: [<0.133.0>,<0.126.0>,<0.127.0>,
+                                                <0.128.0>,<0.131.0>,<0.130.0>,
+                                                <0.129.0>,<0.136.0>,<0.135.0>,
+                                                <0.134.0>,<0.125.0>]
+[{{2024,10,27},{13,53,18}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,18}}] [<0.126.0>] Node <0.126.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.127.0>] Node <0.127.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.128.0>] Node <0.128.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.129.0>] Node <0.129.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.130.0>] Node <0.130.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.131.0>] Node <0.131.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.132.0>] Node <0.132.0> has completed setup with nodes: [<0.132.0>]
+[{{2024,10,27},{13,53,18}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,18}}] [<0.133.0>] Node <0.133.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.134.0>] Node <0.134.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.135.0>] Node <0.135.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.136.0>] Node <0.136.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.137.0>] Node <0.137.0> has completed setup with nodes: [<0.140.0>,<0.139.0>,<0.138.0>,
+                                                <0.137.0>]
+[{{2024,10,27},{13,53,18}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,18}}] [<0.138.0>] Node <0.138.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.139.0>] Node <0.139.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [<0.140.0>] Node <0.140.0> has already completed setup previously.
+[{{2024,10,27},{13,53,18}}] [server] Setup completed for all nodes.
+[{{2024,10,27},{13,53,18}}] [server] Starting Phase 2 for Leader PID: <0.109.0>
+[{{2024,10,27},{13,53,23}}] [server] Timeout waiting for Leader PID: <0.109.0> in Phase 2
+[{{2024,10,27},{13,53,23}}] [server] Starting Phase 2 for Leader PID: <0.109.0>
+[{{2024,10,27},{13,53,23}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,23}}] [<0.109.0>] Received adjacent clusters from Leader PID: <0.109.0>
+[{{2024,10,27},{13,53,23}}] [server] Starting Phase 2 for Leader PID: <0.113.0>
+[{{2024,10,27},{13,53,28}}] [server] Timeout waiting for Leader PID: <0.113.0> in Phase 2
+[{{2024,10,27},{13,53,28}}] [server] Starting Phase 2 for Leader PID: <0.113.0>
+[{{2024,10,27},{13,53,28}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,28}}] [<0.113.0>] Received adjacent clusters from Leader PID: <0.113.0>
+[{{2024,10,27},{13,53,28}}] [server] Starting Phase 2 for Leader PID: <0.123.0>
+[{{2024,10,27},{13,53,33}}] [server] Timeout waiting for Leader PID: <0.123.0> in Phase 2
+[{{2024,10,27},{13,53,33}}] [server] Starting Phase 2 for Leader PID: <0.123.0>
+[{{2024,10,27},{13,53,33}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,33}}] [<0.123.0>] Received adjacent clusters from Leader PID: <0.123.0>
+[{{2024,10,27},{13,53,33}}] [server] Starting Phase 2 for Leader PID: <0.125.0>
+[{{2024,10,27},{13,53,38}}] [server] Timeout waiting for Leader PID: <0.125.0> in Phase 2
+[{{2024,10,27},{13,53,38}}] [server] Starting Phase 2 for Leader PID: <0.125.0>
+[{{2024,10,27},{13,53,38}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,38}}] [<0.125.0>] Received adjacent clusters from Leader PID: <0.125.0>
+[{{2024,10,27},{13,53,38}}] [server] Starting Phase 2 for Leader PID: <0.132.0>
+[{{2024,10,27},{13,53,38}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,38}}] [<0.132.0>] Received adjacent clusters from Leader PID: <0.132.0>
+[{{2024,10,27},{13,53,38}}] [server] Starting Phase 2 for Leader PID: <0.137.0>
+[{{2024,10,27},{13,53,43}}] [server] Timeout waiting for Leader PID: <0.137.0> in Phase 2
+[{{2024,10,27},{13,53,43}}] [server] Starting Phase 2 for Leader PID: <0.137.0>
+[{{2024,10,27},{13,53,43}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{13,53,43}}] [<0.137.0>] Received adjacent clusters from Leader PID: <0.137.0>
+[{{2024,10,27},{14,0,12}}] [server] Server started.
+[{{2024,10,27},{14,0,12}}] [server] Received request to start node setup.
+[{{2024,10,27},{14,0,12}}] [<0.114.0>] Node <0.114.0> has completed setup with nodes: [<0.122.0>,<0.123.0>,<0.124.0>,
+                                                <0.117.0>,<0.125.0>,<0.116.0>,
+                                                <0.115.0>,<0.114.0>]
+[{{2024,10,27},{14,0,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,12}}] [<0.115.0>] Node <0.115.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.116.0>] Node <0.116.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.117.0>] Node <0.117.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.118.0>] Node <0.118.0> has completed setup with nodes: [<0.126.0>,<0.121.0>,<0.120.0>,
+                                                <0.119.0>,<0.127.0>,<0.118.0>]
+[{{2024,10,27},{14,0,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,12}}] [<0.119.0>] Node <0.119.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.120.0>] Node <0.120.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.121.0>] Node <0.121.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.122.0>] Node <0.122.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.123.0>] Node <0.123.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.124.0>] Node <0.124.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.125.0>] Node <0.125.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.126.0>] Node <0.126.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.127.0>] Node <0.127.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.128.0>] Node <0.128.0> has completed setup with nodes: [<0.129.0>,<0.128.0>]
+[{{2024,10,27},{14,0,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,12}}] [<0.129.0>] Node <0.129.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.130.0>] Node <0.130.0> has completed setup with nodes: [<0.138.0>,<0.131.0>,<0.132.0>,
+                                                <0.133.0>,<0.136.0>,<0.135.0>,
+                                                <0.134.0>,<0.141.0>,<0.140.0>,
+                                                <0.139.0>,<0.130.0>]
+[{{2024,10,27},{14,0,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,12}}] [<0.131.0>] Node <0.131.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.132.0>] Node <0.132.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.133.0>] Node <0.133.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.134.0>] Node <0.134.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.135.0>] Node <0.135.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.136.0>] Node <0.136.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.137.0>] Node <0.137.0> has completed setup with nodes: [<0.137.0>]
+[{{2024,10,27},{14,0,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,12}}] [<0.138.0>] Node <0.138.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.139.0>] Node <0.139.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.140.0>] Node <0.140.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.141.0>] Node <0.141.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.142.0>] Node <0.142.0> has completed setup with nodes: [<0.145.0>,<0.144.0>,<0.143.0>,
+                                                <0.142.0>]
+[{{2024,10,27},{14,0,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,12}}] [<0.143.0>] Node <0.143.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.144.0>] Node <0.144.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [<0.145.0>] Node <0.145.0> has already completed setup previously.
+[{{2024,10,27},{14,0,12}}] [server] Setup completed for all nodes.
+[{{2024,10,27},{14,0,12}}] [server] Starting Phase 2 for Leader PID: <0.114.0>
+[{{2024,10,27},{14,0,17}}] [server] Timeout waiting for Leader PID: <0.114.0> in Phase 2
+[{{2024,10,27},{14,0,17}}] [server] Starting Phase 2 for Leader PID: <0.114.0>
+[{{2024,10,27},{14,0,17}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,17}}] [<0.114.0>] Received adjacent clusters from Leader PID: <0.114.0>
+[{{2024,10,27},{14,0,17}}] [server] Starting Phase 2 for Leader PID: <0.118.0>
+[{{2024,10,27},{14,0,22}}] [server] Timeout waiting for Leader PID: <0.118.0> in Phase 2
+[{{2024,10,27},{14,0,22}}] [server] Starting Phase 2 for Leader PID: <0.118.0>
+[{{2024,10,27},{14,0,22}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,22}}] [<0.118.0>] Received adjacent clusters from Leader PID: <0.118.0>
+[{{2024,10,27},{14,0,22}}] [server] Starting Phase 2 for Leader PID: <0.128.0>
+[{{2024,10,27},{14,0,27}}] [server] Timeout waiting for Leader PID: <0.128.0> in Phase 2
+[{{2024,10,27},{14,0,27}}] [server] Starting Phase 2 for Leader PID: <0.128.0>
+[{{2024,10,27},{14,0,27}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,27}}] [<0.128.0>] Received adjacent clusters from Leader PID: <0.128.0>
+[{{2024,10,27},{14,0,27}}] [server] Starting Phase 2 for Leader PID: <0.130.0>
+[{{2024,10,27},{14,0,32}}] [server] Timeout waiting for Leader PID: <0.130.0> in Phase 2
+[{{2024,10,27},{14,0,32}}] [server] Starting Phase 2 for Leader PID: <0.130.0>
+[{{2024,10,27},{14,0,32}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,32}}] [<0.130.0>] Received adjacent clusters from Leader PID: <0.130.0>
+[{{2024,10,27},{14,0,32}}] [server] Starting Phase 2 for Leader PID: <0.137.0>
+[{{2024,10,27},{14,0,32}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,32}}] [<0.137.0>] Received adjacent clusters from Leader PID: <0.137.0>
+[{{2024,10,27},{14,0,32}}] [server] Starting Phase 2 for Leader PID: <0.142.0>
+[{{2024,10,27},{14,0,37}}] [server] Timeout waiting for Leader PID: <0.142.0> in Phase 2
+[{{2024,10,27},{14,0,37}}] [server] Starting Phase 2 for Leader PID: <0.142.0>
+[{{2024,10,27},{14,0,37}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,0,37}}] [<0.142.0>] Received adjacent clusters from Leader PID: <0.142.0>
+[{{2024,10,27},{14,8,46}}] [server] Server started.
+[{{2024,10,27},{14,8,46}}] [server] Received request to start node setup.
+[{{2024,10,27},{14,8,46}}] [<0.114.0>] Node <0.114.0> has completed setup with nodes: [<0.122.0>,<0.123.0>,<0.124.0>,
+                                                <0.117.0>,<0.125.0>,<0.116.0>,
+                                                <0.115.0>,<0.114.0>]
+[{{2024,10,27},{14,8,46}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,8,46}}] [<0.115.0>] Node <0.115.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.116.0>] Node <0.116.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.117.0>] Node <0.117.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.118.0>] Node <0.118.0> has completed setup with nodes: [<0.126.0>,<0.121.0>,<0.120.0>,
+                                                <0.119.0>,<0.127.0>,<0.118.0>]
+[{{2024,10,27},{14,8,46}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,8,46}}] [<0.119.0>] Node <0.119.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.120.0>] Node <0.120.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.121.0>] Node <0.121.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.122.0>] Node <0.122.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.123.0>] Node <0.123.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.124.0>] Node <0.124.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.125.0>] Node <0.125.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.126.0>] Node <0.126.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.127.0>] Node <0.127.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.128.0>] Node <0.128.0> has completed setup with nodes: [<0.129.0>,<0.128.0>]
+[{{2024,10,27},{14,8,46}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,8,46}}] [<0.129.0>] Node <0.129.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.130.0>] Node <0.130.0> has completed setup with nodes: [<0.138.0>,<0.131.0>,<0.132.0>,
+                                                <0.133.0>,<0.136.0>,<0.135.0>,
+                                                <0.134.0>,<0.141.0>,<0.140.0>,
+                                                <0.139.0>,<0.130.0>]
+[{{2024,10,27},{14,8,46}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,8,46}}] [<0.131.0>] Node <0.131.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.132.0>] Node <0.132.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.133.0>] Node <0.133.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.134.0>] Node <0.134.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.135.0>] Node <0.135.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.136.0>] Node <0.136.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.137.0>] Node <0.137.0> has completed setup with nodes: [<0.137.0>]
+[{{2024,10,27},{14,8,46}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,8,46}}] [<0.138.0>] Node <0.138.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.139.0>] Node <0.139.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.140.0>] Node <0.140.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.141.0>] Node <0.141.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.142.0>] Node <0.142.0> has completed setup with nodes: [<0.145.0>,<0.144.0>,<0.143.0>,
+                                                <0.142.0>]
+[{{2024,10,27},{14,8,46}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,8,46}}] [<0.143.0>] Node <0.143.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.144.0>] Node <0.144.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [<0.145.0>] Node <0.145.0> has already completed setup previously.
+[{{2024,10,27},{14,8,46}}] [server] Setup completed for all nodes.
+[{{2024,10,27},{14,8,46}}] [server] Starting Phase 2 for Leader PID: <0.114.0>
+[{{2024,10,27},{14,8,51}}] [server] Timeout waiting for Leader PID: <0.114.0> in Phase 2
+[{{2024,10,27},{14,8,51}}] [server] Starting Phase 2 for Leader PID: <0.114.0>
+[{{2024,10,27},{14,8,51}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,8,51}}] [<0.114.0>] Received adjacent clusters from Leader PID: <0.114.0>
+[{{2024,10,27},{14,8,51}}] [server] Starting Phase 2 for Leader PID: <0.118.0>
+[{{2024,10,27},{14,8,56}}] [server] Timeout waiting for Leader PID: <0.118.0> in Phase 2
+[{{2024,10,27},{14,8,56}}] [server] Starting Phase 2 for Leader PID: <0.118.0>
+[{{2024,10,27},{14,8,56}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,8,56}}] [<0.118.0>] Received adjacent clusters from Leader PID: <0.118.0>
+[{{2024,10,27},{14,8,56}}] [server] Starting Phase 2 for Leader PID: <0.128.0>
+[{{2024,10,27},{14,9,1}}] [server] Timeout waiting for Leader PID: <0.128.0> in Phase 2
+[{{2024,10,27},{14,9,1}}] [server] Starting Phase 2 for Leader PID: <0.128.0>
+[{{2024,10,27},{14,9,1}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,9,1}}] [<0.128.0>] Received adjacent clusters from Leader PID: <0.128.0>
+[{{2024,10,27},{14,9,1}}] [server] Starting Phase 2 for Leader PID: <0.130.0>
+[{{2024,10,27},{14,9,6}}] [server] Timeout waiting for Leader PID: <0.130.0> in Phase 2
+[{{2024,10,27},{14,9,6}}] [server] Starting Phase 2 for Leader PID: <0.130.0>
+[{{2024,10,27},{14,9,6}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,9,6}}] [<0.130.0>] Received adjacent clusters from Leader PID: <0.130.0>
+[{{2024,10,27},{14,9,6}}] [server] Starting Phase 2 for Leader PID: <0.137.0>
+[{{2024,10,27},{14,9,6}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,9,6}}] [<0.137.0>] Received adjacent clusters from Leader PID: <0.137.0>
+[{{2024,10,27},{14,9,6}}] [server] Starting Phase 2 for Leader PID: <0.142.0>
+[{{2024,10,27},{14,9,11}}] [server] Timeout waiting for Leader PID: <0.142.0> in Phase 2
+[{{2024,10,27},{14,9,11}}] [server] Starting Phase 2 for Leader PID: <0.142.0>
+[{{2024,10,27},{14,9,11}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,9,11}}] [<0.142.0>] Received adjacent clusters from Leader PID: <0.142.0>
+[{{2024,10,27},{14,13,11}}] [server] Server started.
+[{{2024,10,27},{14,13,11}}] [server] Received request to start node setup.
+[{{2024,10,27},{14,13,12}}] [<0.114.0>] Node <0.114.0> has completed setup with nodes: [<0.122.0>,<0.123.0>,<0.124.0>,
+                                                <0.117.0>,<0.125.0>,<0.116.0>,
+                                                <0.115.0>,<0.114.0>]
+[{{2024,10,27},{14,13,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,12}}] [<0.115.0>] Node <0.115.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.116.0>] Node <0.116.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.117.0>] Node <0.117.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.118.0>] Node <0.118.0> has completed setup with nodes: [<0.126.0>,<0.121.0>,<0.120.0>,
+                                                <0.119.0>,<0.127.0>,<0.118.0>]
+[{{2024,10,27},{14,13,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,12}}] [<0.119.0>] Node <0.119.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.120.0>] Node <0.120.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.121.0>] Node <0.121.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.122.0>] Node <0.122.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.123.0>] Node <0.123.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.124.0>] Node <0.124.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.125.0>] Node <0.125.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.126.0>] Node <0.126.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.127.0>] Node <0.127.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.128.0>] Node <0.128.0> has completed setup with nodes: [<0.129.0>,<0.128.0>]
+[{{2024,10,27},{14,13,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,12}}] [<0.129.0>] Node <0.129.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.130.0>] Node <0.130.0> has completed setup with nodes: [<0.138.0>,<0.131.0>,<0.132.0>,
+                                                <0.133.0>,<0.136.0>,<0.135.0>,
+                                                <0.134.0>,<0.141.0>,<0.140.0>,
+                                                <0.139.0>,<0.130.0>]
+[{{2024,10,27},{14,13,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,12}}] [<0.131.0>] Node <0.131.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.132.0>] Node <0.132.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.133.0>] Node <0.133.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.134.0>] Node <0.134.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.135.0>] Node <0.135.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.136.0>] Node <0.136.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.137.0>] Node <0.137.0> has completed setup with nodes: [<0.137.0>]
+[{{2024,10,27},{14,13,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,12}}] [<0.138.0>] Node <0.138.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.139.0>] Node <0.139.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.140.0>] Node <0.140.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.141.0>] Node <0.141.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.142.0>] Node <0.142.0> has completed setup with nodes: [<0.145.0>,<0.144.0>,<0.143.0>,
+                                                <0.142.0>]
+[{{2024,10,27},{14,13,12}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,12}}] [<0.143.0>] Node <0.143.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.144.0>] Node <0.144.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [<0.145.0>] Node <0.145.0> has already completed setup previously.
+[{{2024,10,27},{14,13,12}}] [server] Setup completed for all nodes.
+[{{2024,10,27},{14,13,12}}] [server] Starting Phase 2 for Leader PID: <0.114.0>
+[{{2024,10,27},{14,13,17}}] [server] Timeout waiting for Leader PID: <0.114.0> in Phase 2
+[{{2024,10,27},{14,13,17}}] [server] Starting Phase 2 for Leader PID: <0.114.0>
+[{{2024,10,27},{14,13,17}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,17}}] [<0.114.0>] Received adjacent clusters from Leader PID: <0.114.0>
+[{{2024,10,27},{14,13,17}}] [server] Starting Phase 2 for Leader PID: <0.118.0>
+[{{2024,10,27},{14,13,22}}] [server] Timeout waiting for Leader PID: <0.118.0> in Phase 2
+[{{2024,10,27},{14,13,22}}] [server] Starting Phase 2 for Leader PID: <0.118.0>
+[{{2024,10,27},{14,13,22}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,22}}] [<0.118.0>] Received adjacent clusters from Leader PID: <0.118.0>
+[{{2024,10,27},{14,13,22}}] [server] Starting Phase 2 for Leader PID: <0.128.0>
+[{{2024,10,27},{14,13,27}}] [server] Timeout waiting for Leader PID: <0.128.0> in Phase 2
+[{{2024,10,27},{14,13,27}}] [server] Starting Phase 2 for Leader PID: <0.128.0>
+[{{2024,10,27},{14,13,27}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,27}}] [<0.128.0>] Received adjacent clusters from Leader PID: <0.128.0>
+[{{2024,10,27},{14,13,27}}] [server] Starting Phase 2 for Leader PID: <0.130.0>
+[{{2024,10,27},{14,13,32}}] [server] Timeout waiting for Leader PID: <0.130.0> in Phase 2
+[{{2024,10,27},{14,13,32}}] [server] Starting Phase 2 for Leader PID: <0.130.0>
+[{{2024,10,27},{14,13,32}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,32}}] [<0.130.0>] Received adjacent clusters from Leader PID: <0.130.0>
+[{{2024,10,27},{14,13,32}}] [server] Starting Phase 2 for Leader PID: <0.137.0>
+[{{2024,10,27},{14,13,32}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,32}}] [<0.137.0>] Received adjacent clusters from Leader PID: <0.137.0>
+[{{2024,10,27},{14,13,32}}] [server] Starting Phase 2 for Leader PID: <0.142.0>
+[{{2024,10,27},{14,13,37}}] [server] Timeout waiting for Leader PID: <0.142.0> in Phase 2
+[{{2024,10,27},{14,13,37}}] [server] Starting Phase 2 for Leader PID: <0.142.0>
+[{{2024,10,27},{14,13,37}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,13,37}}] [<0.142.0>] Received adjacent clusters from Leader PID: <0.142.0>
+[{{2024,10,27},{14,19,40}}] [server] Server started.
+[{{2024,10,27},{14,19,40}}] [server] Received request to start node setup.
+[{{2024,10,27},{14,19,40}}] [<0.114.0>] Node <0.114.0> has completed setup with nodes: [<0.122.0>,<0.123.0>,<0.124.0>,
+                                                <0.117.0>,<0.125.0>,<0.116.0>,
+                                                <0.115.0>,<0.114.0>]
+[{{2024,10,27},{14,19,40}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,40}}] [<0.115.0>] Node <0.115.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.116.0>] Node <0.116.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.117.0>] Node <0.117.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.118.0>] Node <0.118.0> has completed setup with nodes: [<0.126.0>,<0.121.0>,<0.120.0>,
+                                                <0.119.0>,<0.127.0>,<0.118.0>]
+[{{2024,10,27},{14,19,40}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,40}}] [<0.119.0>] Node <0.119.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.120.0>] Node <0.120.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.121.0>] Node <0.121.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.122.0>] Node <0.122.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.123.0>] Node <0.123.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.124.0>] Node <0.124.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.125.0>] Node <0.125.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.126.0>] Node <0.126.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.127.0>] Node <0.127.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.128.0>] Node <0.128.0> has completed setup with nodes: [<0.129.0>,<0.128.0>]
+[{{2024,10,27},{14,19,40}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,40}}] [<0.129.0>] Node <0.129.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.130.0>] Node <0.130.0> has completed setup with nodes: [<0.138.0>,<0.131.0>,<0.132.0>,
+                                                <0.133.0>,<0.136.0>,<0.135.0>,
+                                                <0.134.0>,<0.141.0>,<0.140.0>,
+                                                <0.139.0>,<0.130.0>]
+[{{2024,10,27},{14,19,40}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,40}}] [<0.131.0>] Node <0.131.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.132.0>] Node <0.132.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.133.0>] Node <0.133.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.134.0>] Node <0.134.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.135.0>] Node <0.135.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.136.0>] Node <0.136.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.137.0>] Node <0.137.0> has completed setup with nodes: [<0.137.0>]
+[{{2024,10,27},{14,19,40}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,40}}] [<0.138.0>] Node <0.138.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.139.0>] Node <0.139.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.140.0>] Node <0.140.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.141.0>] Node <0.141.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.142.0>] Node <0.142.0> has completed setup with nodes: [<0.145.0>,<0.144.0>,<0.143.0>,
+                                                <0.142.0>]
+[{{2024,10,27},{14,19,40}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,40}}] [<0.143.0>] Node <0.143.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.144.0>] Node <0.144.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [<0.145.0>] Node <0.145.0> has already completed setup previously.
+[{{2024,10,27},{14,19,40}}] [server] Setup completed for all nodes.
+[{{2024,10,27},{14,19,40}}] [server] Starting Phase 2 for Leader PID: <0.114.0>
+[{{2024,10,27},{14,19,45}}] [server] Timeout waiting for Leader PID: <0.114.0> in Phase 2
+[{{2024,10,27},{14,19,45}}] [server] Starting Phase 2 for Leader PID: <0.114.0>
+[{{2024,10,27},{14,19,45}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,45}}] [<0.114.0>] Received adjacent clusters from Leader PID: <0.114.0>
+[{{2024,10,27},{14,19,45}}] [server] Starting Phase 2 for Leader PID: <0.118.0>
+[{{2024,10,27},{14,19,50}}] [server] Timeout waiting for Leader PID: <0.118.0> in Phase 2
+[{{2024,10,27},{14,19,50}}] [server] Starting Phase 2 for Leader PID: <0.118.0>
+[{{2024,10,27},{14,19,50}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,50}}] [<0.118.0>] Received adjacent clusters from Leader PID: <0.118.0>
+[{{2024,10,27},{14,19,50}}] [server] Starting Phase 2 for Leader PID: <0.128.0>
+[{{2024,10,27},{14,19,55}}] [server] Timeout waiting for Leader PID: <0.128.0> in Phase 2
+[{{2024,10,27},{14,19,55}}] [server] Starting Phase 2 for Leader PID: <0.128.0>
+[{{2024,10,27},{14,19,55}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,19,55}}] [<0.128.0>] Received adjacent clusters from Leader PID: <0.128.0>
+[{{2024,10,27},{14,19,55}}] [server] Starting Phase 2 for Leader PID: <0.130.0>
+[{{2024,10,27},{14,20,0}}] [server] Timeout waiting for Leader PID: <0.130.0> in Phase 2
+[{{2024,10,27},{14,20,0}}] [server] Starting Phase 2 for Leader PID: <0.130.0>
+[{{2024,10,27},{14,20,0}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,20,0}}] [<0.130.0>] Received adjacent clusters from Leader PID: <0.130.0>
+[{{2024,10,27},{14,20,0}}] [server] Starting Phase 2 for Leader PID: <0.137.0>
+[{{2024,10,27},{14,20,0}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,20,0}}] [<0.137.0>] Received adjacent clusters from Leader PID: <0.137.0>
+[{{2024,10,27},{14,20,0}}] [server] Starting Phase 2 for Leader PID: <0.142.0>
+[{{2024,10,27},{14,20,5}}] [server] Timeout waiting for Leader PID: <0.142.0> in Phase 2
+[{{2024,10,27},{14,20,5}}] [server] Starting Phase 2 for Leader PID: <0.142.0>
+[{{2024,10,27},{14,20,5}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,20,5}}] [<0.142.0>] Received adjacent clusters from Leader PID: <0.142.0>
+[{{2024,10,27},{14,20,5}}] [server] Received unhandled message.
+[{{2024,10,27},{14,20,5}}] [server] Received unhandled message.
+[{{2024,10,27},{14,20,5}}] [server] Received unhandled message.
+[{{2024,10,27},{14,20,5}}] [server] Received unhandled message.
+[{{2024,10,27},{14,20,5}}] [server] Phase 2 completed for all leaders.
+[{{2024,10,27},{14,20,5}}] [server] LeadersData saved to file for redundancy.
+[{{2024,10,27},{14,20,10}}] [server] Received unhandled message.

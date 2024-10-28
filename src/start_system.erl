@@ -48,6 +48,7 @@ start() ->
     io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
     time_server:start(Nodes),
 
+    
     %% Assegnazione dei vicini
     io:format("Sono start_system e assegno i vicini ai nodi.~n"),
     %% Costruisci una mappa per accesso rapido ai nodi
@@ -74,7 +75,15 @@ start() ->
     %% io:format("Nodes = ~p.~n", [NODES]),
 
     io:format("Invio messaggio {start_setup, ~p} a ~p.~n", [NODES, ServerPid]),
-    ServerPid ! {start_setup, NODES}.
+    ServerPid ! {start_setup, NODES},
+
+    %% Alla fine di start_system:start/0
+    io:format("Avvio il visualizer per monitorare i cambiamenti.~n"),
+    visualizer:start_visualizer(NODES).
+
+
+
+
 
 %% Loop che attende tutti gli ACK
 ack_loop(_, 0) ->

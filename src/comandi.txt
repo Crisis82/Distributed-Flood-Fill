@@ -3,7 +3,7 @@ erl
 c(node).
 c(server).
 c(start_system).
-c(visualizer).
+c(time_server).
 start_system:start().
 
 --------------------------------------------
