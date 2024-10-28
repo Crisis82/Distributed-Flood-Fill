@@ -1,6 +1,5 @@
 %% time-server.erl
 -module(time_server).
-
 -export([start/1]).
 
 start(Nodes) ->

@@ -1,27 +1,27 @@
 %% node.erl
 -module(node).
--export([create_node/3, node_loop/6, node_loop_propagate/9]).
+-export([create_node/3, node_loop/7, node_loop_propagate/10]).
 
 %% Creation of a node
 create_node({X, Y}, Color, StartSystemPid) ->
-    Pid = spawn(fun() -> node_loop(X, Y, Color, StartSystemPid, false, self()) end),
+    Pid = spawn(fun() -> node_loop(X, Y, Color, StartSystemPid, false, self(), 0) end),
     io:format("Node (~p, ~p) created with color: ~p, PID: ~p~n", [X, Y, Color, Pid]),
     {X, Y, Pid}.
 
 %% Main loop of the node
-node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID) ->
+node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time) ->
     receive
         {neighbors, Neighbors} ->
             io:format("Node (~p, ~p) received neighbors: ~p~n", [X, Y, Neighbors]),
             %% Send ACK to the start_system process
             StartSystemPid ! {ack_neighbors, self()},
-            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors);
         _Other ->
             io:format("Node (~p, ~p) received an unhandled message.~n", [X, Y]),
-            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID)
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time)
     end.
 
-node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
+node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors) ->
     receive
         {setup_server_request, FromPid} ->
             if
@@ -31,7 +31,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
                         [X, Y]
                     ),
                     FromPid ! {self(), node_already_visited},
-                    node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+                    node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors);
                 true ->
                     io:format(
                         "Node (~p, ~p) receives setup_server_request, not visited, starting propagation of my leaderID: ~p.~n",
@@ -46,6 +46,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
                         Color,
                         StartSystemPid,
                         UpdatedVisited,
+                        Time,
                         Neighbors,
                         LeaderID,
                         ServerPid,
@@ -66,6 +67,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
                         Color,
                         StartSystemPid,
                         UpdatedVisited,
+                        Time,
                         Neighbors,
                         UpdatedLeaderID,
                         FromPid,
@@ -77,12 +79,12 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
                         "Node (~p, ~p) has already been visited, responding accordingly.~n", [X, Y]
                     ),
                     FromPid ! {self(), node_already_visited},
-                    node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+                    node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors);
                 true ->
                     %% The node has a different color: sends only confirmation of receipt
                     io:format("Node (~p, ~p) has a different color, sends only received.~n", [X, Y]),
                     FromPid ! {self(), ack_propagation_different_color},
-                    node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors)
+                    node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors)
             end;
         %% Handle start_phase2 from server (leader initiation in Phase 2)
         {start_phase2, NodePIDs, ServerPid} ->
@@ -123,7 +125,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
                 X, Y, AllAdjacentClusters
             ]),
             ServerPid ! {self(), phase2_complete, LeaderID, AllAdjacentClusters},
-            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors);
         %% Handle start_phase2_node message from leader to nodes (nodes in cluster Phase 2)
         {start_phase2_node, LeaderPid} ->
             io:format("Node (~p, ~p) in cluster starting Phase 2 neighbor check.~n", [X, Y]),
@@ -140,26 +142,35 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors) ->
                 X, Y, UniqueAdjacentClusters
             ]),
             LeaderPid ! {adjacent_clusters_info, self(), UniqueAdjacentClusters},
-            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors);
         %% Handle get_leaderID requests from neighbors in Phase 2
         {get_leaderID, FromPid} ->
             FromPid ! {leaderID_info, self(), LeaderID, Color},
             io:format("Node (~p, ~p) responding with leaderID ~p and color ~p to ~p~n", [
                 X, Y, LeaderID, Color, FromPid
             ]),
-            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors);
         _Other ->
             io:format("Node (~p, ~p) received an unhandled message.~n", [X, Y]),
-            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors);
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors);
         %% Handle time sync from time-server
-        {time, Time} ->
-            io:format("Node (~p, ~p) received time: ~p~n", [X, Y, Time]),
-            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors)
+        {time, ServerTime} ->
+            io:format("Node (~p, ~p) updated its time to ~p~n", [X, Y, ServerTime]),
+            node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, ServerTime, Neighbors)
     end.
 
 %% Function to propagate and manage the cascade
 node_loop_propagate(
-    X, Y, Color, StartSystemPid, Visited, Neighbors, PropagatedLeaderID, FromPid, InitiatorFlag
+    X,
+    Y,
+    Color,
+    StartSystemPid,
+    Visited,
+    Time,
+    Neighbors,
+    PropagatedLeaderID,
+    FromPid,
+    InitiatorFlag
 ) ->
     io:format("Node (~p, ~p) is propagating as leader with ID: ~p and color: ~p.~n", [
         X, Y, PropagatedLeaderID, Color
@@ -184,7 +195,16 @@ node_loop_propagate(
     io:format("Waiting for ACKs for Node (~p, ~p).~n", [X, Y]),
     %% Wait for each neighbor to respond and collect their PIDs
     {ok, AccumulatedPIDs} = wait_for_ack_from_neighbors(
-        NeighborsToSend, [], X, Y, Color, StartSystemPid, Visited, PropagatedLeaderID, Neighbors
+        NeighborsToSend,
+        [],
+        X,
+        Y,
+        Color,
+        StartSystemPid,
+        Visited,
+        PropagatedLeaderID,
+        Time,
+        Neighbors
     ),
     io:format("Finished receiving ACKs for Node (~p, ~p).~n", [X, Y]),
     %% Combine AccumulatedPIDs with own PID
@@ -207,11 +227,20 @@ node_loop_propagate(
     end,
 
     %% Continue node loop
-    node_loop(X, Y, Color, StartSystemPid, Visited, PropagatedLeaderID, Neighbors).
+    node_loop(X, Y, Color, StartSystemPid, Visited, PropagatedLeaderID, Time, Neighbors).
 
 %% Helper function to wait for ACKs from neighbors and collect PIDs
 wait_for_ack_from_neighbors(
-    NeighborsToWaitFor, AccumulatedPIDs, X, Y, Color, StartSystemPid, Visited, LeaderID, Neighbors
+    NeighborsToWaitFor,
+    AccumulatedPIDs,
+    X,
+    Y,
+    Color,
+    StartSystemPid,
+    Visited,
+    LeaderID,
+    Time,
+    Neighbors
 ) ->
     if
         NeighborsToWaitFor == [] ->
@@ -234,6 +263,7 @@ wait_for_ack_from_neighbors(
                         StartSystemPid,
                         Visited,
                         LeaderID,
+                        Time,
                         Neighbors
                     );
                 {FromNeighbor, ack_propagation_different_color} ->
@@ -250,6 +280,7 @@ wait_for_ack_from_neighbors(
                         StartSystemPid,
                         Visited,
                         LeaderID,
+                        Time,
                         Neighbors
                     );
                 {FromNeighbor, node_already_visited} ->
@@ -266,6 +297,7 @@ wait_for_ack_from_neighbors(
                         StartSystemPid,
                         Visited,
                         LeaderID,
+                        Time,
                         Neighbors
                     );
                 %% Handle other messages while waiting
@@ -286,6 +318,7 @@ wait_for_ack_from_neighbors(
                                 Color,
                                 StartSystemPid,
                                 UpdatedVisited,
+                                Time,
                                 Neighbors,
                                 UpdatedLeaderID,
                                 FromPid,
@@ -313,6 +346,7 @@ wait_for_ack_from_neighbors(
                         StartSystemPid,
                         Visited,
                         LeaderID,
+                        Time,
                         Neighbors
                     );
                 {setup_server_request, FromPid} ->
@@ -336,6 +370,7 @@ wait_for_ack_from_neighbors(
                                 Color,
                                 StartSystemPid,
                                 UpdatedVisited,
+                                Time,
                                 Neighbors,
                                 LeaderID,
                                 FromPid,
@@ -351,6 +386,7 @@ wait_for_ack_from_neighbors(
                         StartSystemPid,
                         Visited,
                         LeaderID,
+                        Time,
                         Neighbors
                     );
                 _Other ->
@@ -364,6 +400,7 @@ wait_for_ack_from_neighbors(
                         StartSystemPid,
                         Visited,
                         LeaderID,
+                        Time,
                         Neighbors
                     )
             after 5000 ->
