@@ -2,6 +2,8 @@
 -module(start_system).
 -export([start/2]).
 
+-define(palette, [red, green, blue, yellow, orange, purple, pink, brown, black, white]).
+
 %% Funzione principale che avvia il sistema, il server e i nodi, imposta la sincronizzazione e salva i dati dei nodi.
 %% Input:
 %% - N: numero di righe della matrice dei nodi
@@ -16,18 +18,19 @@ start(N, M) ->
 
     %% Creazione dei nodi nella griglia NxM
     io:format("Sono start_system e inizio a creare nodi.~n"),
-    Palette = [red, green, blue, yellow, orange, purple, pink, brown, black, white], % Tavolozza di colori
-    L = length(Palette),
+    L = length(?palette),
     % Crea ogni nodo con coordinate (X, Y) e un colore casuale
     Nodes = [
-        {X, Y, node:create_node({X, Y}, lists:nth(rand:uniform(L), Palette), self())}
+        {X, Y,
+            node:create_node(node:new_leader({X, Y}, lists:nth(rand:uniform(L), ?palette)), self())}
      || X <- lists:seq(1, N), Y <- lists:seq(1, M)
     ],
     io:format("Sono start_system e ho finito di creare nodi.~n"),
 
     %% Sincronizzazione dei nodi con il time_server
     io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
-    time_server:start(Nodes),  % Avvia il server del tempo e sincronizza i nodi
+    % Avvia il server del tempo e sincronizza i nodi
+    time_server:start(Nodes),
 
     %% Assegnazione dei vicini per ciascun nodo
     io:format("Sono start_system e assegno i vicini ai nodi.~n"),
@@ -53,7 +56,8 @@ start(N, M) ->
 
     % Appiattisce la lista dei nodi per salvarli come JSON
     NODES = flatten_nodes(Nodes),
-    save_nodes_data(NODES),  % Salva i dati dei nodi
+    % Salva i dati dei nodi
+    save_nodes_data(NODES),
 
     % Invia i nodi al server per completare il setup
     io:format("Invio messaggio {start_setup, ~p} a ~p.~n", [NODES, ServerPid]),
@@ -151,9 +155,11 @@ find_neighbors(X, Y, N, M, NodeMap) ->
 %% - Restituisce una lista di nodi {X, Y, Pid} senza annidamenti
 flatten_nodes(Nodes) ->
     % Verifica se la struttura è già appiattita (il terzo elemento è direttamente un PID)
-    case lists:any(
-            fun({_, _, Pid}) -> is_pid(Pid);
-               (_) -> false
+    case
+        lists:any(
+            fun
+                ({_, _, Pid}) -> is_pid(Pid);
+                (_) -> false
             end,
             Nodes
         )
