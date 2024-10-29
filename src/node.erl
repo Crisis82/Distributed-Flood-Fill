@@ -2,10 +2,15 @@
 -module(node).
 -export([create_node/3, node_loop/9, node_loop/10, node_loop_propagate/12]).
 
-
 %% Funzione per la creazione di un nodo
-%% La funzione crea un processo nodo, inizializzandolo con posizione (X, Y), colore, e PID del sistema di avvio
+%% Input:
+%% - {X, Y}: coppia di coordinate per la posizione del nodo
+%% - Color: colore del nodo, assegnato casualmente dalla palette
+%% - StartSystemPid: PID del sistema di avvio
+%% Output:
+%% - Restituisce una tupla {X, Y, Pid}, dove Pid è il PID del nodo creato
 create_node({X, Y}, Color, StartSystemPid) ->
+    % Spawna un processo nodo e avvia il ciclo node_loop
     Pid = spawn(fun() -> node_loop(X,                 % Posizione X
                                    Y,                 % Posizione Y
                                    Color,             % Colore del nodo
@@ -19,8 +24,17 @@ create_node({X, Y}, Color, StartSystemPid) ->
     io:format("Node (~p, ~p) created with color: ~p, PID: ~p~n", [X, Y, Color, Pid]),
     {X, Y, Pid}.
 
-%% Loop principale del nodo
-%% Questa funzione gestisce il ciclo di ricezione dei messaggi e lo stato del nodo
+%% Loop principale del nodo che gestisce la ricezione dei messaggi e aggiorna lo stato
+%% Input:
+%% - X, Y: coordinate del nodo
+%% - Color: colore del nodo
+%% - StartSystemPid: PID del sistema di avvio
+%% - Visited: flag booleano per indicare se il nodo è stato visitato
+%% - LeaderID: PID del leader del nodo
+%% - Time: valore del tempo sincronizzato dal server
+%% - Parent: nodo padre per la propagazione
+%% - Children: lista dei figli del nodo
+%% - Neighbors (nella variante con 10 parametri): lista dei vicini
 node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children) ->
     receive
         %% Gestione dei vicini
@@ -28,6 +42,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children
         {neighbors, Neighbors} ->
             io:format("Node (~p, ~p) received neighbors: ~p~n", [X, Y, Neighbors]),
             StartSystemPid ! {ack_neighbors, self()},
+            % Ritorna a node_loop con i vicini aggiunti
             node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children, Neighbors);
 
         %% Gestione di altri messaggi non definiti per debugging
@@ -37,6 +52,10 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children
     end.
 
 %% Variante del loop principale che include i vicini nel parametro
+%% Input:
+%% - Parametri come sopra, più Neighbors: lista dei PID dei vicini
+%% Output:
+%% - Nessun output diretto; mantiene il nodo in ascolto per nuovi messaggi
 node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children, Neighbors) ->
     receive
         %% Richiesta di setup dal server
@@ -59,7 +78,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children
                         [X, Y, LeaderID]
                     ),
                     UpdatedVisited = true,
-                    %% Inizia la propagazione come nodo iniziatore (initiator)
+                    % Inizia la propagazione come nodo iniziatore
                     node_loop_propagate(
                         X,
                         Y,
@@ -118,16 +137,16 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children
         %% Fase 2 di avvio dal leader
         {start_phase2, NodePIDs, ServerPid} ->
             io:format("Leader Node (~p, ~p) starting Phase 2.~n", [X, Y]),
-            %% Richiede l'ID del leader dai nodi vicini per determinare cluster adiacenti
+            % Richiede l'ID del leader dai vicini per determinare cluster adiacenti
             lists:foreach(
                 fun(NeighborPid) ->
                     NeighborPid ! {get_leaderID, self()}
                 end,
                 Neighbors
             ),
-            %% Colleziona i cluster adiacenti del nodo corrente
+            % Colleziona i cluster adiacenti del nodo corrente
             AdjacentClustersSelf = collect_adjacent_clusters(Neighbors, [], LeaderID, Color, X, Y),
-            %% Invia messaggio di inizio fase 2 a tutti i nodi del cluster
+            % Filtra il PID del leader stesso e notifica tutti i nodi del cluster
             NodePIDsFiltered = lists:filter(fun(NodePID) -> NodePID =/= self() end, NodePIDs),
             lists:foreach(
                 fun(NodePID) ->
@@ -138,9 +157,9 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children
                 end,
                 NodePIDsFiltered
             ),
-            %% Raccoglie i cluster adiacenti da altri nodi
+            % Colleziona i cluster adiacenti dagli altri nodi
             AdjacentClustersOthers = collect_adjacent_clusters_from_nodes(NodePIDsFiltered, []),
-            %% Unisce tutti i cluster adiacenti e li invia al server
+            % Unisce tutti i cluster adiacenti e li invia al server
             AllAdjacentClusters = lists:usort(
                 lists:append(AdjacentClustersSelf, AdjacentClustersOthers)
             ),
@@ -150,7 +169,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children
             ServerPid ! {self(), phase2_complete, LeaderID, AllAdjacentClusters},
             node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children, Neighbors);
 
-        %% Gestione di start_phase2_node per nodi nel cluster
+        %% Gestione di start_phase2_node per i nodi nel cluster
         {start_phase2_node, LeaderPid} ->
             io:format("Node (~p, ~p) in cluster starting Phase 2 neighbor check.~n", [X, Y]),
             lists:foreach(
@@ -159,7 +178,7 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children
                 end,
                 Neighbors
             ),
-            %% Colleziona cluster adiacenti dai vicini
+            % Colleziona cluster adiacenti dai vicini
             AdjacentClusters = collect_adjacent_clusters(Neighbors, [], LeaderID, Color, X, Y),
             UniqueAdjacentClusters = lists:usort(AdjacentClusters),
             io:format("Node (~p, ~p) sending adjacent clusters ~p to Leader.~n", [
@@ -192,8 +211,25 @@ node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children
             node_loop(X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Parent, Children, Neighbors)
     end.
 
+
+
+%% node.erl
+
 %% Funzione per propagare il messaggio di setup e gestire la cascata
-%% La funzione propaga il leader ID e colore ai vicini, escludendo il nodo che ha inviato la richiesta
+%% Input:
+%% - X, Y: coordinate del nodo
+%% - Color: colore del nodo
+%% - StartSystemPid: PID del sistema di avvio
+%% - Visited: flag booleano per il controllo di visita
+%% - Time: tempo sincronizzato
+%% - Neighbors: lista dei PID dei nodi vicini
+%% - PropagatedLeaderID: ID del leader propagato
+%% - FromPid: PID del nodo mittente della richiesta di setup
+%% - InitiatorFlag: flag per indicare se il nodo è l’iniziatore della propagazione
+%% - Parent: PID del nodo padre
+%% - Children: lista dei figli del nodo
+%% Output:
+%% - Nessun output diretto; mantiene il nodo in ascolto per nuovi messaggi
 node_loop_propagate(
     X,
     Y,
@@ -211,9 +247,11 @@ node_loop_propagate(
     io:format("Node (~p, ~p) is propagating as leader with ID: ~p and color: ~p.~n", [
         X, Y, PropagatedLeaderID, Color
     ]),
-    NeighborsToSend = [N || N <- Neighbors, N =/= FromPid], % Esclude il nodo mittente dalla lista dei vicini
+    % Esclude il nodo mittente dalla lista dei vicini per evitare loop
+    NeighborsToSend = [N || N <- Neighbors, N =/= FromPid],
     io:format("Node (~p, ~p) will send messages to neighbors: ~p~n", [X, Y, NeighborsToSend]),
-    %% Propaga a ciascun vicino
+
+    % Invia il messaggio di setup a ciascun vicino
     lists:foreach(
         fun(NeighborPid) ->
             io:format(
@@ -224,24 +262,16 @@ node_loop_propagate(
         end,
         NeighborsToSend
     ),
+
+    % Attende gli ACK dai vicini e raccoglie i loro PID
     io:format("Waiting for ACKs for Node (~p, ~p).~n", [X, Y]),
-    %% Attende gli ACK dai vicini e raccoglie i loro PID
     {ok, AccumulatedPIDs} = wait_for_ack_from_neighbors(
         NeighborsToSend,
-        [],
-        X,
-        Y,
-        Color,
-        StartSystemPid,
-        Visited,
-        PropagatedLeaderID,
-        Time,
-        Neighbors,
-        Parent,
-        Children
+        [], % Inizializza lista dei PID accumulati
+        X, Y, Color, StartSystemPid, Visited, PropagatedLeaderID, Time, Neighbors, Parent, Children
     ),
-    io:format("Finished receiving ACKs for Node (~p, ~p).~n", [X, Y]),
-    %% Se il nodo è iniziatore, invia i PID combinati al server
+
+    % Se il nodo è l’iniziatore, invia i PID combinati al server
     CombinedPIDs = lists:append(AccumulatedPIDs, [self()]),
     case InitiatorFlag of
         initiator ->
@@ -250,10 +280,17 @@ node_loop_propagate(
         non_initiator ->
             FromPid ! {self(), ack_propagation_same_color, CombinedPIDs}
     end,
-    %% Continua il ciclo principale del nodo
+
+    % Continua il ciclo principale del nodo con lo stato aggiornato
     node_loop(X, Y, Color, StartSystemPid, Visited, PropagatedLeaderID, Time, Parent, Children, Neighbors).
 
 %% Funzione helper per attendere gli ACK dai vicini e raccogliere i loro PID
+%% Input:
+%% - NeighborsToWaitFor: lista dei PID dei vicini da cui si attendono ACK
+%% - AccumulatedPIDs: lista accumulata dei PID dei vicini che hanno risposto
+%% - Parametri di stato del nodo: X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors, Parent, Children
+%% Output:
+%% - {ok, AccumulatedPIDs}: lista di PID che confermano la propagazione
 wait_for_ack_from_neighbors(
     NeighborsToWaitFor,
     AccumulatedPIDs,
@@ -269,45 +306,31 @@ wait_for_ack_from_neighbors(
     Children
 ) ->
     if
+        % Se non ci sono vicini da attendere, restituisce la lista dei PID accumulati
         NeighborsToWaitFor == [] ->
             {ok, AccumulatedPIDs};
         true ->
             receive
                 %% Gestione ACK dallo stesso colore, aggiunge i PID dei vicini
                 {FromNeighbor, ack_propagation_same_color, NeighborPIDs} ->
+                    % Rimuove il vicino che ha risposto dalla lista e aggiunge i suoi PID
                     RemainingNeighbors = lists:delete(FromNeighbor, NeighborsToWaitFor),
                     NewAccumulatedPIDs = lists:append(AccumulatedPIDs, NeighborPIDs),
+                    % Richiama la funzione ricorsivamente con lista aggiornata
                     wait_for_ack_from_neighbors(
                         RemainingNeighbors,
                         NewAccumulatedPIDs,
-                        X,
-                        Y,
-                        Color,
-                        StartSystemPid,
-                        Visited,
-                        LeaderID,
-                        Time,
-                        Neighbors,
-                        Parent,
-                        Children
+                        X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors, Parent, Children
                     );
 
                 %% Gestione ACK di colore diverso
                 {FromNeighbor, ack_propagation_different_color} ->
+                    % Rimuove il vicino dalla lista e prosegue senza aggiungere PID
                     RemainingNeighbors = lists:delete(FromNeighbor, NeighborsToWaitFor),
                     wait_for_ack_from_neighbors(
                         RemainingNeighbors,
                         AccumulatedPIDs,
-                        X,
-                        Y,
-                        Color,
-                        StartSystemPid,
-                        Visited,
-                        LeaderID,
-                        Time,
-                        Neighbors,
-                        Parent,
-                        Children
+                        X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors, Parent, Children
                     );
 
                 %% Gestione nodo già visitato
@@ -316,16 +339,7 @@ wait_for_ack_from_neighbors(
                     wait_for_ack_from_neighbors(
                         RemainingNeighbors,
                         AccumulatedPIDs,
-                        X,
-                        Y,
-                        Color,
-                        StartSystemPid,
-                        Visited,
-                        LeaderID,
-                        Time,
-                        Neighbors,
-                        Parent,
-                        Children
+                        X, Y, Color, StartSystemPid, Visited, LeaderID, Time, Neighbors, Parent, Children
                     );
 
                 %% Timeout in caso di mancata risposta dai vicini
@@ -335,15 +349,18 @@ wait_for_ack_from_neighbors(
             end
     end.
 
-
 %% Funzione per collezionare cluster adiacenti da una lista di vicini
-%% Utilizzata nella fase 2 per determinare cluster vicini che hanno leader ID diverso
+%% Utilizzata nella fase 2 per determinare cluster vicini che hanno un leader ID diverso
+%% Input:
+%% - Lista di vicini, lista dei cluster adiacenti inizialmente vuota, ID del leader e colore del nodo corrente, coordinate (X, Y)
+%% Output:
+%% - Restituisce una lista dei cluster adiacenti univoci
 collect_adjacent_clusters([], AdjacentClusters, _OwnLeaderID, _Color, _X, _Y) ->
     AdjacentClusters;
 collect_adjacent_clusters([_Neighbor | RestNeighbors], AdjacentClusters, OwnLeaderID, Color, X, Y) ->
     receive
         {leaderID_info, _FromPid, NeighborLeaderID, NeighborColor} ->
-            %% Verifica se il leader ID del vicino è diverso
+            % Verifica se il leader ID del vicino è diverso
             NewAdjacentClusters =
                 if
                     NeighborLeaderID =/= OwnLeaderID ->
@@ -351,26 +368,36 @@ collect_adjacent_clusters([_Neighbor | RestNeighbors], AdjacentClusters, OwnLead
                     true ->
                         AdjacentClusters
                 end,
+            % Richiama la funzione ricorsivamente per continuare con i vicini rimanenti
             collect_adjacent_clusters(RestNeighbors, NewAdjacentClusters, OwnLeaderID, Color, X, Y);
-        %% Richiede l'ID del leader al vicino
+        
+        % Richiede l'ID del leader al vicino
         {get_leaderID, FromPid} ->
             FromPid ! {leaderID_info, self(), OwnLeaderID, Color},
             collect_adjacent_clusters(RestNeighbors, AdjacentClusters, OwnLeaderID, Color, X, Y)
     after 5000 ->
+        % Timeout per la risposta del vicino, ritorna la lista di cluster adiacenti raccolti
         AdjacentClusters
     end.
 
 %% Funzione per raccogliere cluster adiacenti dai nodi
 %% Utilizzata dal leader per raccogliere le informazioni di cluster dai nodi nel cluster
+%% Input:
+%% - Lista di PID dei nodi, lista dei cluster adiacenti accumulata
+%% Output:
+%% - Restituisce una lista univoca dei cluster adiacenti a tutti i nodi del cluster
 collect_adjacent_clusters_from_nodes([], AccumulatedAdjacentClusters) ->
     lists:usort(AccumulatedAdjacentClusters);
 collect_adjacent_clusters_from_nodes([NodePID | RestNodePIDs], AccumulatedAdjacentClusters) ->
     receive
         {adjacent_clusters_info, NodePID, NodeAdjacentClusters} ->
-            %% Aggiunge i cluster adiacenti ricevuti alla lista accumulata
+            % Aggiunge i cluster adiacenti ricevuti dal nodo alla lista accumulata
             NewAccumulatedAdjacentClusters = lists:append(AccumulatedAdjacentClusters, NodeAdjacentClusters),
             collect_adjacent_clusters_from_nodes(RestNodePIDs, NewAccumulatedAdjacentClusters)
     after 5000 ->
-        %% Timeout per la raccolta dei cluster adiacenti
+        % Timeout per la raccolta delle informazioni dal nodo
         AccumulatedAdjacentClusters
     end.
+
+
+
