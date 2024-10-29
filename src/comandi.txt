@@ -1,10 +1,17 @@
-erl
+%%%% erl -pa ./jiffy/_build/default/lib/jiffy/ebin/
+%%%% erl -pa ./jiffy/_build/default/lib/jiffy/ebin -pa ./ebin
+erl 
 
 c(node).
 c(server).
 c(start_system).
 c(time_server).
+c(visualizzatore).
 start_system:start().
+
+
+c(visualizzatore).
+visualizzatore:start().
 
 --------------------------------------------
 

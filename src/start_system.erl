@@ -14,26 +14,6 @@ start() ->
     DimStrings = binary:split(DimBinary, [<<"\n">>], [global, trim]),
     [N, M] = [list_to_integer(binary_to_list(X)) || X <- DimStrings],
 
-    %% OLD METHOD using a matrix of colors
-
-    %% %% Lettura dei colori
-    %% io:format("Sono start_system e assegno dei colori random.~n"),
-    %% %%{ok, ColorsBinary} = file:read_file("colors.txt"),
-    %% %% Colors = lists:map(
-    %% %%     fun binary_to_list/1, binary:split(ColorsBinary, [<<"\n">>], [global, trim])
-    %% %% ),
-    %% Palette = [red, green, blue, yellow, orange, purple, pink, brown, black, white],
-    %% L = length(Palette),
-    %% Colors = [[lists:nth(rand:uniform(L), Palette) || _ <- lists:seq(1, N)] || _ <- lists:seq(1, M)],
-
-    %% %% Creazione dei nodi
-    %% io:format("Sono start_system e inizio a creare nodi.~n"),
-    %% Nodes = [
-    %%     {X, Y, node:create_node({X, Y}, lists:nth(Y, lists:nth(X, Colors)), self())}
-    %%  || X <- lists:seq(1, N), Y <- lists:seq(1, M)
-    %% ],
-    %% io:format("Sono start_system e ho finito di creare nodi.~n"),
-
     %% Creazione dei nodi
     io:format("Sono start_system e inizio a creare nodi.~n"),
     Palette = [red, green, blue, yellow, orange, purple, pink, brown, black, white],
@@ -71,19 +51,40 @@ start() ->
     io:format("Tutti gli ACK ricevuti, avvio il setup dei nodi con il server.~n"),
 
     NODES = flatten_nodes(Nodes),
-
-    %% io:format("Nodes = ~p.~n", [NODES]),
+    % Salva NODES come stringa
+    save_nodes_data(NODES),
 
     io:format("Invio messaggio {start_setup, ~p} a ~p.~n", [NODES, ServerPid]),
     ServerPid ! {start_setup, NODES},
 
     %% Alla fine di start_system:start/0
     io:format("Avvio il visualizer per monitorare i cambiamenti.~n"),
-    visualizer:start_visualizer(NODES).
+    visualizzatore:start().
 
 
+% Funzione principale per convertire e salvare i nodi in formato JSON
+save_nodes_data(Nodes) ->
+    % Converte la lista di nodi in una lista di stringhe JSON-compatibili
+    JsonNodes = lists:map(fun({X, Y, Pid}) ->
+                              node_to_json(X, Y, Pid)
+                          end, Nodes),
+                          
+    % Combina le stringhe dei nodi in un array JSON
+    JsonString = "[" ++ string:join(JsonNodes, ",") ++ "]",
+    
+    % Scrive il JSON su file
+    file:write_file("nodes_data.json", JsonString).
 
+% Funzione di utilità per convertire un singolo nodo in formato JSON
+node_to_json(X, Y, Pid) ->
+    XStr = integer_to_list(X),
+    YStr = integer_to_list(Y),
+    PidStr = pid_to_string(Pid),
+    io_lib:format("{\"x\": ~s, \"y\": ~s, \"pid\": \"~s\"}", [XStr, YStr, PidStr]).
 
+% Funzione di utilità per convertire un PID in stringa
+pid_to_string(Pid) ->
+    erlang:pid_to_list(Pid).
 
 %% Loop che attende tutti gli ACK
 ack_loop(_, 0) ->

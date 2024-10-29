@@ -340,9 +340,9 @@ wait_for_ack_from_neighbors(
 %% Utilizzata nella fase 2 per determinare cluster vicini che hanno leader ID diverso
 collect_adjacent_clusters([], AdjacentClusters, _OwnLeaderID, _Color, _X, _Y) ->
     AdjacentClusters;
-collect_adjacent_clusters([Neighbor | RestNeighbors], AdjacentClusters, OwnLeaderID, Color, X, Y) ->
+collect_adjacent_clusters([_Neighbor | RestNeighbors], AdjacentClusters, OwnLeaderID, Color, X, Y) ->
     receive
-        {leaderID_info, FromPid, NeighborLeaderID, NeighborColor} ->
+        {leaderID_info, _FromPid, NeighborLeaderID, NeighborColor} ->
             %% Verifica se il leader ID del vicino è diverso
             NewAdjacentClusters =
                 if
