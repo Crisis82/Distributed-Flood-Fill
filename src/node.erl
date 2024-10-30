@@ -3,7 +3,7 @@
     create_node/2,
     node_loop/3,
     node_loop_propagate/7,
-    new_node/8,
+    new_node/3,
     new_leader/5
 ]).
 
@@ -13,7 +13,7 @@
 
 %% new_node/8
 %% Creates a basic node with the given parameters, including its PID and neighbors.
-new_node(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors) ->
+new_node(X, Y, Parent) ->
     #node{
         x = X,
         y = Y,
@@ -156,10 +156,10 @@ node_loop(Leader, StartSystemPid, Visited) ->
                     UpdatedNode = Leader#leader.node#node{
                         parent = FromPid, leaderID = PropagatedLeaderID
                     },
-                    UpdatedLeader = Leader#leader{node = UpdatedNode},
 
                     node_loop_propagate(
-                        UpdatedLeader,
+                        %% Becames a simple node
+                        UpdatedNode,
                         Leader#leader.color,
                         FromPid,
                         %% Set visited status to true
@@ -178,6 +178,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                     ),
                     FromPid ! {self(), node_already_visited},
                     node_loop(
+                        %% Already visited, so it doesn't change the type
                         Leader,
                         StartSystemPid,
                         Visited
@@ -189,6 +190,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                     ]),
                     FromPid ! {self(), ack_propagation_different_color},
                     node_loop(
+                        %% Different color, thus the node can be a leader of another cluster
                         Leader,
                         StartSystemPid,
                         Visited
@@ -279,7 +281,12 @@ node_loop_propagate(
     InitiatorFlag,
     StartSystemPid
 ) ->
-    Node = Leader#leader.node,
+    if
+        is_record(Leader, leader) ->
+            Node = Leader#leader.node;
+        true ->
+            Node = Leader
+    end,
 
     io:format("Node (~p, ~p) is propagating as leader with ID: ~p and color: ~p.~n", [
         Node#node.x, Node#node.y, Node#node.leaderID, Color
@@ -332,8 +339,15 @@ node_loop_propagate(
             FromPid ! {self(), ack_propagation_same_color, CombinedPIDs}
     end,
 
+    %% Se il nodo era leader, aggiorna il nodo interno
+    if
+        is_record(Leader, leader) ->
+            UpdatedLeader = Leader#leader{node = Node},
+        true ->
+            UpdatedLeader = Node
+    end,
+
     %% Continua il ciclo principale del nodo con lo stato aggiornato
-    UpdatedLeader = Leader#leader{node = Node},
     node_loop(
         UpdatedLeader, StartSystemPid, Visited
     ).
