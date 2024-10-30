@@ -17,22 +17,17 @@ new_node(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors) ->
     #node{
         x = X,
         y = Y,
-        parent = Parent,
-        children = Children,
-        time = Time,
-        leaderID = LeaderID,
-        pid = Pid,
-        neighbors = Neighbors
+        parent = Parent
     }.
 
 %% new_leader/4
 %% Creates a leader node, assigns its own PID as the leaderID, and initializes neighbors.
 new_leader(X, Y, Color, ServerPid, StartSystemPid) ->
     % Step 1: Create a base node with an initial PID and empty neighbors
-    Node = new_node(X, Y, ServerPid, [], undefined, undefined, undefined, []),
+    Node = new_node(X, Y, ServerPid),
 
     % Step 2: Create the leader record with the initial node
-    Leader = #leader{node = Node, color = Color, serverID = ServerPid, adjClusters = [], nodes_in_cluster = []},
+    Leader = #leader{node = Node, color = Color, serverID = ServerPid},
 
     % Step 3: Start the node process and update leaderID and pid fields
     UpdatedLeader = create_node(Leader, StartSystemPid),
@@ -211,39 +206,40 @@ node_loop(Leader, StartSystemPid, Visited) ->
             %% Invia messaggio {get_leader_info, self()} a ciascun vicino e raccoglie le risposte
             AllAdjacentClusters = gather_adjacent_clusters(Neighbors, LeaderID, []),
 
-            io:format("AllAdjacentClusters : ~p ~n",[AllAdjacentClusters]),
+            io:format("AllAdjacentClusters : ~p ~n", [AllAdjacentClusters]),
 
             io:format("Nodi cluster: ~p ~n", [NodePIDs]),
 
             %% Invia messaggio a ciascun nodo nel cluster `NodePIDs` per verificare cluster adiacenti
-            FinalAdjacentClusters = gather_adjacent_clusters(NodePIDs, LeaderID, AllAdjacentClusters),
-            
-            io:format("FinalAdjacentClusters : ~p ~n",[FinalAdjacentClusters]),
-            
+            FinalAdjacentClusters = gather_adjacent_clusters(
+                NodePIDs, LeaderID, AllAdjacentClusters
+            ),
+
+            io:format("FinalAdjacentClusters : ~p ~n", [FinalAdjacentClusters]),
+
             %% Invia i cluster adiacenti finali al server
             ServerPid ! {self(), phase2_complete, LeaderID, FinalAdjacentClusters},
 
-            UpdatedLeader = Leader#leader{nodes_in_cluster = NodePIDs, adjClusters = FinalAdjacentClusters},
+            UpdatedLeader = Leader#leader{
+                nodes_in_cluster = NodePIDs, adjClusters = FinalAdjacentClusters
+            },
 
             node_loop(
                 UpdatedLeader,
                 StartSystemPid,
                 Visited
             );
-
-
         %% Leader ID request from neighbors
         {get_leader_info, FromPid} ->
-            io:format("~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader.~n", [self(), FromPid]),
-            FromPid ! {leader_info, Leader#leader.node#node.leaderID},
+            io:format("~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader.~n", [
+                self(), FromPid
+            ]),
+            FromPid ! {leader_info, Leader#leader.node#node.leaderID, Leader#leader.color},
             node_loop(
-                Leader, 
-                StartSystemPid, 
+                Leader,
+                StartSystemPid,
                 Visited
             );
-        
-        
-
         %% Adding a child to the list
         {add_child, ChildPid} ->
             UpdatedChildren = [ChildPid | Leader#leader.node#node.children],
@@ -429,7 +425,6 @@ wait_for_ack_from_neighbors(
             end
     end.
 
-
 % Funzione per inviare il messaggio e raccogliere i leader ID distinti dai vicini
 %% Input:
 %% - PidList: lista dei PID dei vicini o nodi nel cluster
@@ -443,11 +438,11 @@ gather_adjacent_clusters([], _LeaderID, AccumulatedClusters) ->
 gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters) ->
     Pid ! {get_leader_info, self()},
     receive
-        {leader_info, NeighborLeaderID} ->
-            io:format("~p -> Ho ricevuto la risposta da ~p e mi ha mandato: ~p.~n", [self(), Pid, NeighborLeaderID]),
+        {leader_info, NeighborLeaderID, NeighborColor} ->
+            io:format("~p -> Ho ricevuto la risposta da ~p e mi ha mandato: ~p.~n", [self(), Pid, NeighborLeaderID, NeighborColor],
             %% Se il leaderID è diverso, aggiungilo alla lista
             UpdatedClusters = case NeighborLeaderID =/= LeaderID of
-                true -> [NeighborLeaderID | AccumulatedClusters];
+                true -> [{NeighborLeaderID, NeighborColor} | AccumulatedClusters];
                 false -> AccumulatedClusters
             end,
             io:format("Per ora ho ~p e mi rimangono : ~p ~n",[UpdatedClusters, Rest]),
