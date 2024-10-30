@@ -26,11 +26,10 @@ loop(Socket) ->
     case gen_tcp:recv(Socket, 0) of
         {ok, BinData} ->
             % Converte i dati binari ricevuti in una lista di caratteri
-            case binary_to_list(BinData) of
-                Data ->
-                    % Divide il messaggio ricevuto (formato "PID,Color") in due parti: PidStr e Color
-                    [PidStr, Color] = string:split(Data, ",", all),
-                    
+            Data = binary_to_list(BinData),
+            % Divide il messaggio ricevuto (formato "PID,Color") in due parti: PidStr e Color
+            case string:split(Data, ",", all) of
+                [PidStr, Color] ->
                     % Tenta di convertire la stringa del PID in un PID Erlang
                     try
                         Pid = list_to_pid(PidStr),
@@ -46,9 +45,9 @@ loop(Socket) ->
                             io:format("Errore nella conversione del PID~n"),
                             gen_tcp:send(Socket, "error")  % Invia "error" al client in caso di fallimento
                     end;
-                % Gestisce il caso in cui i dati non siano nel formato previsto
                 _ ->
-                    gen_tcp:send(Socket, "error")  % Risponde con "error" se il formato non è corretto
+                    io:format("Errore nella struttura dei dati ricevuti~n"),
+                    gen_tcp:send(Socket, "error")  % Invio "error" se il formato è errato
             end,
             % Chiude il socket dopo aver inviato la risposta
             gen_tcp:close(Socket);

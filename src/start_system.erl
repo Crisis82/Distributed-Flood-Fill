@@ -4,12 +4,13 @@
 
 -define(palette, [red, green, blue, yellow, orange, purple, pink, brown, black, white]).
 
+-record(node, {x, y, parent, children = [], time, leaderID, pid, neighbors = []}).
+-record(leader, {node, color, serverID, adjClusters = [], nodes_in_cluster = []}).
+
 %% Funzione principale che avvia il sistema, il server e i nodi, imposta la sincronizzazione e salva i dati dei nodi.
 %% Input:
 %% - N: numero di righe della matrice dei nodi
 %% - M: numero di colonne della matrice dei nodi
-%% Output:
-%% - Avvia il server e configura i nodi; salva i dati dei nodi in un file JSON
 start(N, M) ->
     %% Avvio del server
     io:format("Sono start_system e avvio server.~n"),
@@ -21,62 +22,131 @@ start(N, M) ->
     L = length(?palette),
     % Crea ogni nodo con coordinate (X, Y) e un colore casuale
     Nodes = [
-        {X, Y,
-            node:create_node(node:new_leader({X, Y}, lists:nth(rand:uniform(L), ?palette)), self())}
+        node:new_leader(X, Y, lists:nth(rand:uniform(L), ?palette), ServerPid, self())
      || X <- lists:seq(1, N), Y <- lists:seq(1, M)
     ],
-    io:format("Sono start_system e ho finito di creare nodi.~n"),
 
-    %% Sincronizzazione dei nodi con il time_server
-    io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
-    % Avvia il server del tempo e sincronizza i nodi
-    time_server:start(Nodes),
-
-    %% Assegnazione dei vicini per ciascun nodo
-    io:format("Sono start_system e assegno i vicini ai nodi.~n"),
-    % Crea una mappa delle coordinate dei nodi per accesso rapido
-    NodeMap = maps:from_list([{{X, Y}, Pid} || {X, Y, Pid} <- Nodes]),
+    %% Stampa delle informazioni dei nodi creati
+    io:format("I seguenti nodi sono stati creati:.~n"),
     lists:foreach(
-        fun({X, Y, Pid}) ->
-            % Trova i vicini del nodo e li invia al processo del nodo
-            Neighbors = find_neighbors(X, Y, N, M, NodeMap),
-            PIDs = [element(3, Neighbor) || Neighbor <- Neighbors],
-            % Invia i PID dei vicini al nodo
-            element(3, Pid) ! {neighbors, PIDs}
+        fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
+            io:format("Node Information:~n"),
+            io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
+            io:format("  Parent: ~p~n", [Node#node.parent]),
+            io:format("  Children: ~p~n", [Node#node.children]),
+            io:format("  Time: ~p~n", [Node#node.time]),
+            io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
+            io:format("  PID: ~p~n", [Node#node.pid]),
+            io:format("  Color: ~p~n", [Color]),
+            io:format("  Server ID: ~p~n", [ServerID]),
+            io:format("  Adjacent Clusters: ~p~n~n", [AdjClusters])
         end,
         Nodes
     ),
+
+    io:format("Sono start_system e ho finito di creare nodi.~n"),
+
+    
+    %% Itera attraverso ciascun nodo nella lista `Nodes`, assegna i vicini e aggiorna il campo neighbors
+    UpdatedNodes = lists:map(
+        fun(#leader{node = Node} = Leader) ->
+            X = Node#node.x,
+            Y = Node#node.y,
+            Pid = Node#node.pid,
+
+            %% Trova i vicini basandosi direttamente sulla lista `Nodes`
+            Neighbors = find_neighbors(X, Y, Nodes, N, M),
+
+            %% Stampa i PID dei vicini
+            io:format("Node (~p, ~p) PID: ~p has neighbors: ~p~n", [X, Y, Pid, Neighbors]),
+
+            %% Crea una nuova versione di Leader con il campo neighbors aggiornato
+            UpdatedNode = Node#node{neighbors = Neighbors},
+            UpdatedLeader = Leader#leader{node = UpdatedNode},
+
+            %% Invia i vicini al processo nodo
+            io:format("Sono il start_system ~p e invio a PID: ~p il messaggio: {neighbors, ~p}~n", [self(), Pid, Neighbors]),
+            Pid ! {neighbors, Neighbors},
+
+            %% Restituisce il Leader aggiornato
+            UpdatedLeader
+        end,
+        Nodes
+    ),
+
+
     io:format("Sono start_system e ho assegnato i vicini ai nodi.~n"),
 
     %% Attendi gli ACK da tutti i nodi per confermare la configurazione
-    ack_loop(Nodes, length(Nodes)),
+    ack_loop(UpdatedNodes, length(UpdatedNodes)),
+
+    %% Sincronizzazione dei nodi con il time_server
+    io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
+    time_server:start(UpdatedNodes),
+
 
     %% Dopo aver ricevuto tutti gli ACK, invia il setup al server
     io:format("Tutti gli ACK ricevuti, avvio il setup dei nodi con il server.~n"),
 
     % Appiattisce la lista dei nodi per salvarli come JSON
-    NODES = flatten_nodes(Nodes),
     % Salva i dati dei nodi
-    save_nodes_data(NODES),
+    io:format("Nodes = ~p~n", [UpdatedNodes]),
+    save_nodes_data(UpdatedNodes),
+
+
+     %% Stampa delle informazioni dei nodi creati
+    io:format("I seguenti nodi sono stati creati:.~n"),
+    lists:foreach(
+        fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
+            io:format("Node Information:~n"),
+            io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
+            io:format("  Parent: ~p~n", [Node#node.parent]),
+            io:format("  Children: ~p~n", [Node#node.children]),
+            io:format("  Time: ~p~n", [Node#node.time]),
+            io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
+            io:format("  PID: ~p~n", [Node#node.pid]),
+            io:format("  Color: ~p~n", [Color]),
+            io:format("  Server ID: ~p~n", [ServerID]),
+            io:format("  Adjacent Clusters: ~p~n~n", [AdjClusters])
+        end,
+        UpdatedNodes
+    ),
+
 
     % Invia i nodi al server per completare il setup
-    io:format("Invio messaggio {start_setup, ~p} a ~p.~n", [NODES, ServerPid]),
-    ServerPid ! {start_setup, NODES},
+    io:format("Invio messaggio {start_setup, ~p} a ~p.~n", [UpdatedNodes, ServerPid]),
+    ServerPid ! {start_setup, UpdatedNodes},
 
     % Avvia il server TCP per la visualizzazione
-    io:format("Avvio il tcp_server per visualizzare i nodi.~n"),
-    tcp_server:start().
+    % io:format("Avvio il tcp_server per visualizzare i nodi.~n").
+    % tcp_server:start().
 
-%% Funzione che salva i dati dei nodi in un file JSON
+    io:format("FINITO").
+    
+
+
+%% Funzione che salva i dati dei nodi in un file JSON con tutti i campi
 %% Input:
-%% - Nodes: lista di tuple {X, Y, Pid} per ciascun nodo
+%% - Nodes: lista di record `leader`, ciascuno contenente un nodo `node` con tutti i campi
 %% Output:
-%% - Nessun output diretto, ma salva un file "nodes_data.json" contenente i dati dei nodi
+%% - Nessun output diretto, ma salva un file "nodes_data.json" contenente i dati dei nodi completi
 save_nodes_data(Nodes) ->
-    % Converte ciascun nodo in stringa JSON
+    % Converte ciascun nodo in stringa JSON con tutti i campi
     JsonNodes = lists:map(
-        fun({X, Y, Pid}) ->
-            node_to_json(X, Y, Pid)
+        fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
+            node_to_json(
+                Node#node.x,
+                Node#node.y,
+                Node#node.parent,
+                Node#node.children,
+                Node#node.time,
+                Node#node.leaderID,
+                Node#node.pid,
+                Node#node.neighbors,
+                Color,
+                ServerID,
+                AdjClusters
+            )
         end,
         Nodes
     ),
@@ -85,25 +155,34 @@ save_nodes_data(Nodes) ->
     % Scrive l'array JSON su file
     file:write_file("nodes_data.json", JsonString).
 
-%% Funzione di utilità per convertire un singolo nodo in formato JSON
+%% Funzione di utilità per convertire un singolo nodo in formato JSON con tutti i campi
 %% Input:
-%% - X, Y: coordinate del nodo
-%% - Pid: processo ID del nodo
+%% - Parametri dei campi del nodo
 %% Output:
-%% - Restituisce una stringa JSON che rappresenta il nodo
-node_to_json(X, Y, Pid) ->
+%% - Restituisce una stringa JSON che rappresenta il nodo completo
+node_to_json(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors, Color, ServerID, AdjClusters) ->
     XStr = integer_to_list(X),
     YStr = integer_to_list(Y),
+    ParentStr = pid_to_string(Parent),
+    ChildrenStr = lists:map(fun pid_to_string/1, Children),
+    TimeStr = io_lib:format("~p", [Time]),
+    LeaderIDStr = pid_to_string(LeaderID),
     PidStr = pid_to_string(Pid),
-    io_lib:format("{\"x\": ~s, \"y\": ~s, \"pid\": \"~s\"}", [XStr, YStr, PidStr]).
+    NeighborsStr = lists:map(fun pid_to_string/1, Neighbors),
+    ColorStr = atom_to_list(Color),
+    ServerIDStr = pid_to_string(ServerID),
+    AdjClustersStr = lists:map(fun pid_to_string/1, AdjClusters),
 
-%% Funzione per convertire un PID in una stringa
-%% Input:
-%% - Pid: processo ID Erlang
-%% Output:
-%% - Una stringa che rappresenta il PID
+    io_lib:format(
+        "{\"x\": ~s, \"y\": ~s, \"parent\": \"~s\", \"children\": ~s, \"time\": \"~s\", \"leaderID\": \"~s\", \"pid\": \"~s\", \"neighbors\": ~s, \"color\": \"~s\", \"serverID\": \"~s\", \"adjClusters\": ~s}",
+        [XStr, YStr, ParentStr, io_lib:format("~p", [ChildrenStr]), TimeStr, LeaderIDStr, PidStr,
+         io_lib:format("~p", [NeighborsStr]), ColorStr, ServerIDStr, io_lib:format("~p", [AdjClustersStr])]
+    ).
+
+%% Funzione di utilità per convertire un PID in una stringa per il JSON
 pid_to_string(Pid) ->
-    erlang:pid_to_list(Pid).
+    lists:flatten(io_lib:format("~p", [Pid])).
+
 
 %% Loop che attende tutti gli ACK dai nodi per completare la configurazione
 %% Input:
@@ -112,7 +191,7 @@ pid_to_string(Pid) ->
 %% Output:
 %% - Si conclude una volta che tutti gli ACK sono stati ricevuti
 ack_loop(_, 0) ->
-    io:format("Tutti gli ACK sono stati ricevuti.~n");
+    io:format("Tutti gli ACK sono stati ricevuti.~n~n~n");
 ack_loop(Nodes, RemainingACKs) ->
     receive
         {ack_neighbors, Pid} ->
@@ -125,12 +204,11 @@ ack_loop(Nodes, RemainingACKs) ->
 %% Funzione per trovare i vicini di un nodo nella griglia
 %% Input:
 %% - X, Y: coordinate del nodo corrente
-%% - N, M: dimensioni massime della griglia (NxM)
-%% - NodeMap: mappa che associa le coordinate al PID del nodo
+%% - Nodes: lista dei nodi esistenti
+%% - N, M: dimensioni della griglia
 %% Output:
-%% - Restituisce una lista di PIDs dei vicini del nodo corrente
-find_neighbors(X, Y, N, M, NodeMap) ->
-    % Calcola le coordinate dei potenziali vicini (esclude il nodo stesso)
+%% - Restituisce una lista di PID dei vicini del nodo corrente
+find_neighbors(X, Y, Nodes, N, M) ->
     NeighborCoords = [
         {X + DX, Y + DY}
      || DX <- [-1, 0, 1],
@@ -141,31 +219,10 @@ find_neighbors(X, Y, N, M, NodeMap) ->
         Y + DY >= 1,
         Y + DY =< M
     ],
-    % Ottiene il PID dei vicini dalle coordinate trovate
-    [
-        Pid
-     || {NX, NY} <- NeighborCoords,
-        Pid <- [maps:get({NX, NY}, NodeMap)]
-    ].
 
-%% Funzione di utilità per appiattire la lista dei nodi se necessario
-%% Input:
-%% - Nodes: lista di nodi, dove ciascun nodo può essere {X, Y, Pid} o {X, Y, {_, _, Pid}}
-%% Output:
-%% - Restituisce una lista di nodi {X, Y, Pid} senza annidamenti
-flatten_nodes(Nodes) ->
-    % Verifica se la struttura è già appiattita (il terzo elemento è direttamente un PID)
-    case
-        lists:any(
-            fun
-                ({_, _, Pid}) -> is_pid(Pid);
-                (_) -> false
-            end,
-            Nodes
-        )
-    of
-        % Se già appiattito, restituisce Nodes così com'è
-        true -> Nodes;
-        % Altrimenti, appiattisce il terzo elemento in ciascun nodo
-        false -> [{X, Y, Pid} || {X, Y, {_, _, Pid}} <- Nodes]
-    end.
+    %% Trova i PID dei nodi vicini in base alle coordinate
+    [
+        NeighborNode#node.pid
+     || #leader{node = NeighborNode} <- Nodes,
+        lists:member({NeighborNode#node.x, NeighborNode#node.y}, NeighborCoords)
+    ].
