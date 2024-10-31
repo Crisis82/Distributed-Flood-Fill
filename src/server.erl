@@ -116,15 +116,18 @@ leader_to_json(LeadersData, LeaderPid) ->
     io_lib:format("{\"leader_id\": \"~s\", \"adjacent_clusters\": ~s, \"color\": \"~s\", \"nodes\": ~s}",
                   [LeaderPidStr, AdjacentClustersJson, Color, NodesJson]).
 
-%% Funzione per convertire i cluster adiacenti in una lista JSON
+%% Funzione per convertire i cluster adiacenti in una lista JSON con {PID, Color, LeaderID}
 %% Input:
-%% - AdjacentClusters: lista di PID dei cluster adiacenti
+%% - AdjacentClusters: lista di tuple {Pid, Color, LeaderID} dei cluster adiacenti
 %% Output:
-%% - Una stringa JSON che rappresenta i cluster adiacenti
+%% - Una stringa JSON che rappresenta i cluster adiacenti come oggetti con PID, Color, LeaderID
 adjacent_clusters_to_json(AdjacentClusters) ->
     % Rimuove duplicati e genera la lista di stringhe JSON per ciascun cluster adiacente
     UniqueClusters = lists:usort(AdjacentClusters),
-    ClustersJson = [io_lib:format("\"~s\"", [pid_to_string(Pid)]) || Pid <- UniqueClusters],
+    ClustersJson = [io_lib:format(
+                       "{\"pid\": \"~s\", \"color\": \"~s\", \"leader_id\": \"~s\"}",
+                       [pid_to_string(Pid), atom_to_string(Color), pid_to_string(LeaderID)]
+                   ) || {Pid, Color, LeaderID} <- UniqueClusters],
     "[" ++ string:join(ClustersJson, ",") ++ "]".
 
 %% Funzione per convertire una lista di nodi in una stringa JSON
