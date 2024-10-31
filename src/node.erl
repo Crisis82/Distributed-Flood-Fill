@@ -268,46 +268,47 @@ node_loop(Leader, StartSystemPid, Visited) ->
             io:format("Node (~p, ~p) received a color change request to ~p.~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y, NewColor
             ]),
+            Timestamp = Leader#leader.node#node.time,
             %% Invia il messaggio di cambio colore al leader
-            Leader#node.leaderID ! {color_change, NewColor},
+            Leader#node.leaderID ! {color_change, Timestamp, NewColor},
             node_loop(
                 Leader, StartSystemPid, Visited
             );
-        %% Change the color of the cluster
-        {color_change, NewColor} ->
-            io:format("Node (~p, ~p) changed color to ~p.~n", [
-                Leader#leader.node#node.x, Leader#leader.node#node.y, NewColor
-            ]),
-            % Updates the color of the cluster
-            UpdatedLeader = Leader#leader{color = NewColor},
-            % Notifies the server of the color change
-            Leader#leader.serverID ! {color_change_complete, self(), NewColor},
-            % Checks if the color is equal to one of the adjacent clusters.
-            % If it's the case, sends a merge request to the ones that shares the same NewColor.
-            lists:foreach(
-                fun({SameColorNeighborPid, _SameColorNeighborColor}) ->
-                    io:format("Node (~p, ~p) sends merge request to ~p.~n", [
-                        Leader#leader.node#node.x, Leader#leader.node#node.y, SameColorNeighborPid
+        %% The leader changes the color of the cluster
+        {color_change, Timestamp, NewColor} ->
+            if
+                Timestamp > Leader#leader.last_timestamp ->
+                    io:format("Leader (~p, ~p) accepted the color change request.~n", [
+                        Leader#leader.node#node.x, Leader#leader.node#node.y
                     ]),
-                    SameColorNeighborPid ! {merge_request, self()}
+                    UpdatedLeader = changeColor(Leader, Timestamp, NewColor);
+                true ->
+                    io:format("The color change request is declined. Reason: OLD_TIMESTAMP.~n"),
+                    UpdatedLeader = Leader
+            end,
+            node_loop(
+                UpdatedLeader, StartSystemPid, Visited
+            );
+        %% Updates color for the sender in adjacency cluster list
+        {color_adj_update, FromPid, NewColor} ->
+            % Updates the color in the adjacency clusters
+            UpdatedAdjClusters = lists:map(
+                fun({AdjLeaderID, _AdjColor}) ->
+                    if
+                        AdjLeaderID == FromPid ->
+                            {AdjLeaderID, NewColor};
+                        true ->
+                            {AdjLeaderID, _AdjColor}
+                    end
                 end,
-                lists:filter(
-                    fun({_AdjLeaderID, AdjClusterColor}) ->
-                        if
-                            AdjClusterColor == NewColor ->
-                                true;
-                            true ->
-                                false
-                        end
-                    end,
-                    Leader#leader.adjClusters
-                )
+                Leader#leader.adjClusters
             ),
+            UpdatedLeader = Leader#leader{adjClusters = UpdatedAdjClusters},
             node_loop(
                 UpdatedLeader, StartSystemPid, Visited
             );
         %% Merge request from another cluster
-        {merge_request, FromPid} ->
+        {merge_request, Timestamp, FromPid} ->
             io:format("Node (~p, ~p) received a merge request from ~p.~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid
             ]),
@@ -335,7 +336,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                 Leader#leader.node#node.x, Leader#leader.node#node.y, NeighborPid
             ]),
             %% Updates the adjacency clusters with the received ones
-            UpdatedAdjClusters = custom_merge(Leader#leader.adjClusters, NeighborAjdCluster),
+            UpdatedAdjClusters = merge(Leader#leader.adjClusters, NeighborAjdCluster),
             UpdatedLeader = Leader#leader{adjClusters = UpdatedAdjClusters},
             node_loop(
                 UpdatedLeader, StartSystemPid, Visited
@@ -558,11 +559,49 @@ gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters) ->
         gather_adjacent_clusters(Rest, LeaderID, AccumulatedClusters)
     end.
 
-%% Custom merge because Erlang lists:merge doesn't suit our needs
-custom_merge(AdjClusters, []) ->
+changeColor(Leader, Timestamp, NewColor) ->
+    % Updates the color of the cluster
+    UpdatedLeader = Leader#leader{color = NewColor, last_timestamp = Timestamp},
+    io:format("Node (~p, ~p) changed color to ~p.~n", [
+        Leader#leader.node#node.x, Leader#leader.node#node.y, NewColor
+    ]),
+    % Notifies the server of the color change
+    Leader#leader.serverID ! {color_change_complete, self(), NewColor},
+    % Notifies adjacent clusters of the color change
+    lists:forach(
+        fun({NeighborLeaderID, _NeighborColor}) ->
+            NeighborLeaderID ! {color_adj_update, self(), NewColor}
+        end,
+        Leader#leader.adjClusters
+    ),
+    % Checks if the color is equal to one of the adjacent clusters.
+    % If it's the case, sends a merge request to the ones that shares the same NewColor.
+    lists:foreach(
+        fun({SameColorNeighborPid, _SameColorNeighborColor}) ->
+            io:format("Node (~p, ~p) sends merge request to ~p.~n", [
+                Leader#leader.node#node.x, Leader#leader.node#node.y, SameColorNeighborPid
+            ]),
+            SameColorNeighborPid ! {merge_request, Timestamp, self()}
+        end,
+        lists:filter(
+            fun({_AdjLeaderID, AdjClusterColor}) ->
+                if
+                    AdjClusterColor == NewColor ->
+                        true;
+                    true ->
+                        false
+                end
+            end,
+            Leader#leader.adjClusters
+        )
+    ),
+    UpdatedLeader.
+
+%% Custom merge because instead of sorting using BIF lists:merge,
+%% we just append the entries which are not a duplicate.
+merge(AdjClusters, []) ->
     AdjClusters;
-custom_merge(AdjClusters, [NeighborAdjCluster | RestNeighborAdjClusters]) ->
-    %% TODO: check for duplicates, otherwise append
+merge(AdjClusters, [NeighborAdjCluster | RestNeighborAdjClusters]) ->
     UpdatedAdjClusters =
         case lists:member(NeighborAdjCluster, AdjClusters) of
             true ->
@@ -570,4 +609,4 @@ custom_merge(AdjClusters, [NeighborAdjCluster | RestNeighborAdjClusters]) ->
             false ->
                 lists:append(AdjClusters, [NeighborAdjCluster])
         end,
-    custom_merge(UpdatedAdjClusters, RestNeighborAdjClusters).
+    merge(UpdatedAdjClusters, RestNeighborAdjClusters).
