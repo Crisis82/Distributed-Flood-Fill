@@ -84,13 +84,14 @@ def load_nodes_data():
 # Output:
 # - Restituisce il colore (stringa) del nodo se associato a un leader, altrimenti "grey".
 def get_node_color(pid, leaders_data):
-    # Cerca il leader a cui appartiene il nodo e restituisce il colore del cluster
+    # Cerca il nodo per il PID e restituisce il suo colore
     for leader_data in leaders_data:
-        if leader_data["leader_id"] == pid or pid in leader_data["nodes"]:
+        if leader_data["leader_id"] == pid:
             return leader_data["color"]
-    
-    # Ritorna grigio se il nodo non appartiene ad alcun leader
-    return "grey"
+        for node_pid in leader_data["nodes"]:
+            if node_pid == pid:
+                return leader_data["color"]
+    return "grey"  # Default a grigio se il nodo non è trovato
 
 import sys
 
@@ -162,13 +163,13 @@ def draw_matrix():
 # Output:
 # - Restituisce il pid del leader se il nodo è associato a un leader; None se non associato
 def find_leader(pid, leaders_data):
-    # Cerca il leader nei dati dei cluster
     for leader_data in leaders_data:
-        if leader_data["leader_id"] == pid or pid in leader_data["nodes"]:
-            return leader_data["leader_id"]  # Restituisce il pid del leader se trovato
-    
-    # Se il nodo non ha un leader, restituisce None
+        if leader_data["leader_id"] == pid:
+            return leader_data["leader_id"]
+        if pid in leader_data["nodes"]:
+            return leader_data["leader_id"]
     return None
+
 
 
 
@@ -183,23 +184,19 @@ def find_leader(pid, leaders_data):
 # Output:
 # - La funzione disegna linee di connessione tra nodi adiacenti appartenenti allo stesso cluster
 def draw_cluster_connections(ax, x, y, pid, position_map, leaders_data, max_x, max_y):
-    # Definisce le posizioni adiacenti (incluse diagonali) rispetto al nodo corrente
     adjacent_positions = [
         (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1),
         (x - 1, y - 1), (x - 1, y + 1), (x + 1, y - 1), (x + 1, y + 1)
     ]
     
-    # Trova il leader del nodo corrente
     leader_pid = find_leader(pid, leaders_data)
-    x_center, y_center = y - 0.5, max_x - x + 0.5  # Posizione centrale del nodo
+    x_center, y_center = y - 0.5, max_x - x + 0.5
 
-    # Itera tra i nodi adiacenti e disegna linee per collegare quelli con lo stesso leader
     for pos in adjacent_positions:
         if pos in position_map:
             neighbor_pid = position_map[pos]
             neighbor_leader_pid = find_leader(neighbor_pid, leaders_data)
-            # Se il nodo e il vicino hanno lo stesso leader, disegna la connessione
-            if leader_pid == neighbor_leader_pid:
+            if leader_pid == neighbor_leader_pid:  # Solo disegna linee per nodi con lo stesso leader
                 neighbor_x_center, neighbor_y_center = pos[1] - 0.5, max_x - pos[0] + 0.5
                 ax.plot(
                     [x_center, neighbor_x_center],
