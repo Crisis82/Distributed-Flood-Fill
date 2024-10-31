@@ -252,6 +252,97 @@ node_loop(Leader, StartSystemPid, Visited) ->
                 StartSystemPid,
                 Visited
             );
+        %% Updates the parent
+        {parent_update, NewParent} ->
+            UpdatedNode = Leader#node{parent = NewParent},
+            lists:foreach(
+                fun(child) ->
+                    child ! {parent_update, NewParent}
+                end,
+                Leader#node.children
+            ),
+            node_loop(
+                UpdatedNode,
+                StartSystemPid,
+                Visited
+            );
+        %% Request to change the color of the cluster
+        {color_change_request, NewColor} ->
+            io:format("Node (~p, ~p) received a color change request to ~p.~n", [
+                Leader#leader.node#node.x, Leader#leader.node#node.y, NewColor
+            ]),
+            %% Invia il messaggio di cambio colore al leader
+            Leader#node.leaderID ! {color_change, NewColor},
+            node_loop(
+                Leader, StartSystemPid, Visited
+            );
+        %% Change the color of the cluster
+        {color_change, NewColor} ->
+            io:format("Node (~p, ~p) changed color to ~p.~n", [
+                Leader#leader.node#node.x, Leader#leader.node#node.y, NewColor
+            ]),
+            % Updates the color of the cluster
+            UpdatedLeader = Leader#leader{color = NewColor},
+            % Notifies the server of the color change
+            Leader#leader.serverID ! {color_change_complete, self(), NewColor},
+            % Checks if the color is equal to one of the adjacent clusters.
+            % If it's the case, sends a merge request to the ones that shares the same NewColor.
+            lists:foreach(
+                fun({SameColorNeighborPid, _SameColorNeighborColor}) ->
+                    io:format("Node (~p, ~p) sends merge request to ~p.~n", [
+                        Leader#leader.node#node.x, Leader#leader.node#node.y, SameColorNeighborPid
+                    ]),
+                    SameColorNeighborPid ! {merge_request, self()}
+                end,
+                lists:filter(
+                    fun({_AdjLeaderID, AdjClusterColor}) ->
+                        if
+                            AdjClusterColor == NewColor ->
+                                true;
+                            true ->
+                                false
+                        end
+                    end,
+                    Leader#leader.adjClusters
+                )
+            ),
+            node_loop(
+                UpdatedLeader, StartSystemPid, Visited
+            );
+        %% Merge request from another cluster
+        {merge_request, FromPid} ->
+            io:format("Node (~p, ~p) received a merge request from ~p.~n", [
+                Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid
+            ]),
+            % Updates the parent and leaderID on the loop
+            UpdatedNode = Leader#leader.node#node{parent = FromPid, leaderID = FromPid},
+            %% Propagates the leaderID update
+            lists:foreach(
+                fun(child) ->
+                    child ! {parent_update, FromPid}
+                end,
+                Leader#leader.node#node.children
+            ),
+            %% Sends its own adjacency clusters' list to the requesting node
+            %% NOTE: this also work as an ACK for the merge request
+            FromPid ! {adj_cluster_merge, self(), Leader#leader.adjClusters},
+            node_loop(
+                %% The node is no more a leader
+                UpdatedNode,
+                StartSystemPid,
+                Visited
+            );
+        %% Receives the adjacency clusters list after a merge request as an ACK
+        {adj_cluster_merge, NeighborPid, NeighborAjdCluster} ->
+            io:format("Node (~p, ~p) received adjacency clusters from ~p.~n", [
+                Leader#leader.node#node.x, Leader#leader.node#node.y, NeighborPid
+            ]),
+            %% Updates the adjacency clusters with the received ones
+            UpdatedAdjClusters = custom_merge(Leader#leader.adjClusters, NeighborAjdCluster),
+            UpdatedLeader = Leader#leader{adjClusters = UpdatedAdjClusters},
+            node_loop(
+                UpdatedLeader, StartSystemPid, Visited
+            );
         %% Unhandled messages
         _Other ->
             io:format("Node (~p, ~p) received an unhandled message.~n", [
@@ -281,6 +372,7 @@ node_loop_propagate(
     InitiatorFlag,
     StartSystemPid
 ) ->
+    %% Checks if the node is a leader
     if
         is_record(Leader, leader) ->
             Node = Leader#leader.node;
@@ -464,3 +556,10 @@ gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters) ->
     after 5000 ->  % Timeout opzionale
         gather_adjacent_clusters(Rest, LeaderID, AccumulatedClusters)
     end.
+
+%% Custom merge because Erlang lists:merge doesn't suit our needs
+custom_merge(AdjClusters, []) ->
+    AdjClusters.
+custom_merge(AdjClusters, [NeighborAdjCluster | RestNeighborAdjClusters]) ->
+    %% TODO: check for duplicates, otherwise append
+    custom_merge(UpdatedAdjClusters, RestNeighborAdjClusters).
