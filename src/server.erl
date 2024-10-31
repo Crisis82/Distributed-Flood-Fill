@@ -72,6 +72,7 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
                     log_operation("Setup completed for all nodes."),
                     io:format("Setup Phase 1 completed. LeadersData: ~p~n", [LeadersData]),
                     start_phase2_for_all_leaders(LeadersData, []);
+
                 [#leader{node = Node} = Leader | RestNodes] -> % Passa al prossimo nodo da configurare
                     Node#node.pid ! {setup_server_request, self()},
                     server_loop(RestNodes, ProcessedNodes ++ [Leader], LeadersData)
@@ -82,6 +83,24 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
             log_operation("Received unhandled message."),
             server_loop(Nodes, ProcessedNodes, LeadersData)
     end.
+
+finish_setup(LeadersData) ->
+    io:format("SETUP COMPLETATO PER TUTTI I NODI~n"),
+    io:format("Chiedo a tutti i nodi di salvare le loro informazioni su DB locali~n"),
+
+    % Ottieni i PID di tutti i leader e invia loro il messaggio di salvataggio
+    LeaderPids = maps:keys(LeadersData),
+
+    io:format("Leader Pids : ~p", [LeaderPids]),
+
+    lists:foreach(
+        fun(LeaderPid) ->
+            % Invia il messaggio di salvataggio includendo il PID del server per l'ACK
+            io:format("Chiedo a ~p di salvare i dati. ~n",[LeaderPid]),
+            LeaderPid ! {save_to_db, self()}
+        end,
+        LeaderPids
+    ).
 
 %% Funzione che salva la configurazione dei leader in formato JSON
 %% Input:
@@ -187,13 +206,16 @@ start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
     case maps:keys(RemainingLeaders) of
         % Se non ci sono leader rimanenti, Fase 2 completata
         [] ->
+            
+            io:format("~n~n ------------------------------------- ~n"),
             io:format("Phase 2 completed. All leaders have been processed.~n"),
+            io:format("~n ------------------------------------- ~n~n"),
             io:format("Final Overlay Network Data~n~p~n", [LeadersData]),
             % Converte e salva i dati finali dei leader in formato JSON
             JsonData = save_leader_configuration_json(LeadersData),
             file:write_file("leaders_data.json", JsonData),
-            % Notifica il server loop che la Fase 2 è terminata
-            self() ! phase2_done;
+            io:format("Dati dei leader salvasti in leaders_data.json ~n"),
+            finish_setup(LeadersData);
 
         % Se ci sono leader rimanenti, processa il primo PID rimanente
         [LeaderPid | _ ] ->
