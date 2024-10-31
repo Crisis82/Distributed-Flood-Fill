@@ -10,21 +10,40 @@ import os
 import threading
 from matplotlib.colors import rgb_to_hsv
 import socket
+import numpy as np
 
+def custom_rgb_to_hsv(rgb):
+    r, g, b = rgb
+    max_c = max(r, g, b)
+    min_c = min(r, g, b)
+    delta = max_c - min_c
 
-# Funzione per determinare se un colore è scuro
-# Input:
-# - rgb: una tupla (R, G, B) che rappresenta un colore in formato RGB
-# Output:
-# - Restituisce True se il colore è considerato "scuro", False altrimenti.
+    # Hue calculation
+    if delta == 0:
+        h = 0
+    elif max_c == r:
+        h = (g - b) / delta % 6
+    elif max_c == g:
+        h = (b - r) / delta + 2
+    elif max_c == b:
+        h = (r - g) / delta + 4
+    h *= 60  # Convert to degrees
+
+    # Saturation calculation
+    s = 0 if max_c == 0 else delta / max_c
+
+    # Value calculation
+    v = max_c
+
+    return np.array([h, s, v])
+
 def is_dark_color(rgb):
-    # Considera blu scuro (0, 0, 1) come caso speciale
-    if rgb == (0, 0, 1):
+    if rgb == (0, 0, 1):  # Caso speciale per il blu scuro
         return True
     else:
-        # Converte in HSV e verifica la luminosità
-        hsv = rgb_to_hsv(rgb)
+        hsv = custom_rgb_to_hsv(rgb)
         return hsv[2] < 0.9  # Luminosità sotto 0.9 è considerata scura
+
 
 # Inizializza l'app Flask e configura il supporto WebSocket con SocketIO
 app = Flask(__name__)
@@ -39,15 +58,24 @@ IMG_PATH = "static/matrix.png"      # Percorso per salvare l'immagine della matr
 # Output:
 # - Restituisce un dizionario con le informazioni sui leader e i loro nodi.
 def load_leaders_data():
-    with open(LEADERS_FILE, "r") as file:
-        return json.load(file)
+    try:
+        with open(LEADERS_FILE, "r") as file:
+            return json.load(file)
+    except json.JSONDecodeError:
+        print("Errore nel caricamento del file JSON dei leader.")
+        return []
+
 
 # Funzione per caricare i dati dei nodi da un file JSON
 # Output:
 # - Restituisce un dizionario con le informazioni sui nodi, incluse coordinate e pid.
 def load_nodes_data():
-    with open(NODES_FILE, "r") as file:
-        return json.load(file)
+    try:
+        with open(NODES_FILE, "r") as file:
+            return json.load(file)
+    except json.JSONDecodeError:
+        print("Errore nel caricamento del file JSON dei nodi.")
+        return []
 
 # Funzione per ottenere il colore di un nodo basato sul suo leader
 # Input:
@@ -56,21 +84,19 @@ def load_nodes_data():
 # Output:
 # - Restituisce il colore (stringa) del nodo se associato a un leader, altrimenti "grey".
 def get_node_color(pid, leaders_data):
-    # Verifica se il nodo è un leader e ritorna il suo colore
-    if pid in leaders_data:
-        return leaders_data[pid]["color"]
-    
     # Cerca il leader a cui appartiene il nodo e restituisce il colore del cluster
-    for leader_pid, cluster_data in leaders_data.items():
-        if pid in cluster_data["nodes"]:
-            return cluster_data["color"]
+    for leader_data in leaders_data:
+        if leader_data["leader_id"] == pid or pid in leader_data["nodes"]:
+            return leader_data["color"]
     
     # Ritorna grigio se il nodo non appartiene ad alcun leader
     return "grey"
 
-# Funzione per disegnare la matrice dei nodi
-# Output:
-# - Salva un'immagine della matrice come file PNG. La funzione non restituisce dati.
+import sys
+
+# Controlla se il programma è avviato in modalità debug
+DEBUG_MODE = "--debug" in sys.argv
+
 def draw_matrix():
     # Carica i dati dei leader e dei nodi
     leaders_data = load_leaders_data()
@@ -108,11 +134,14 @@ def draw_matrix():
         # Determina il colore del testo (bianco su sfondi scuri, nero su sfondi chiari)
         text_color = "white" if is_dark_color(rgb) else "black"
         
-        # Aggiunge le coordinate e il pid del nodo al centro del rettangolo
+        # Aggiunge solo le coordinate del nodo nella modalità normale
         ax.text(y - 0.5, max_x - x + 0.3, f"({x},{y})", ha="center", va="center", color=text_color, fontsize=8, weight="bold")
-        ax.text(y - 0.5, max_x - x + 0.7, f"{pid}", ha="center", va="center", color=text_color, fontsize=8, weight="bold")
         
-        # Se il nodo è un leader, aggiunge una "L" accanto al pid
+        # Aggiunge il PID solo in modalità debug
+        if DEBUG_MODE:
+            ax.text(y - 0.5, max_x - x + 0.7, f"{pid}", ha="center", va="center", color=text_color, fontsize=8, weight="bold")
+        
+        # Se il nodo è un leader, aggiunge una "L" accanto al PID
         if pid in leaders_data:
             label_color = "white" if is_dark_color(rgb) else "black"
             ax.text(y - 0.5, max_x - x + 0.5, "L", ha="center", va="center", color=label_color, fontsize=14, weight="bold")
@@ -125,6 +154,7 @@ def draw_matrix():
     fig.savefig(IMG_PATH, bbox_inches='tight', pad_inches=0)
     fig.clear()
 
+
 # Funzione per trovare il leader di un nodo basato sul suo pid
 # Input:
 # - pid: ID del nodo di cui si desidera trovare il leader
@@ -132,17 +162,14 @@ def draw_matrix():
 # Output:
 # - Restituisce il pid del leader se il nodo è associato a un leader; None se non associato
 def find_leader(pid, leaders_data):
-    # Se il nodo è un leader, restituisce se stesso come leader
-    if pid in leaders_data:
-        return pid
-    
     # Cerca il leader nei dati dei cluster
-    for leader_pid, cluster_data in leaders_data.items():
-        if pid in cluster_data["nodes"]:
-            return leader_pid  # Restituisce il pid del leader se trovato
+    for leader_data in leaders_data:
+        if leader_data["leader_id"] == pid or pid in leader_data["nodes"]:
+            return leader_data["leader_id"]  # Restituisce il pid del leader se trovato
     
     # Se il nodo non ha un leader, restituisce None
     return None
+
 
 
 # Funzione per disegnare linee tra nodi adiacenti dello stesso cluster
@@ -338,14 +365,14 @@ def home():
                 <img src="/matrix" alt="Matrix" style="display: block;">
                 <div class="grid-overlay">
                     {% for node in nodes_data %}
-                        <div class="node" onclick="selectNode('{{ node.pid }}')"></div>
+                        <div class="node" onclick="selectNode('{{ node.pid }}', {{ node.x }}, {{ node.y }})"></div>
                     {% endfor %}
                 </div>
             </div>
 
             <form method="POST" action="/change_color" id="colorForm">
-                <label for="pid">PID Selezionato:</label>
-                <input type="text" id="pid" name="pid" readonly>
+                <label id="selectedLabel">{{ "PID Selezionato:" if debug_mode else "Coordinate Selezionate:" }}</label>
+                <input type="text" id="selection" name="selection" readonly>
 
                 <label for="color">Colore:</label>
                 <select id="color" name="color">
@@ -372,9 +399,15 @@ def home():
                     window.location.reload();
                 });
 
-                const pidInput = document.getElementById('pid');
-                function selectNode(pid) {
-                    pidInput.value = pid;
+                const selectionInput = document.getElementById('selection');
+                const debugMode = {{ 'true' if debug_mode else 'false' }};
+                
+                function selectNode(pid, x, y) {
+                    if (debugMode) {
+                        selectionInput.value = pid;  // Mostra il PID in modalità debug
+                    } else {
+                        selectionInput.value = `(${x},${y})`;  // Mostra solo le coordinate in modalità normale
+                    }
                 }
 
                 setTimeout(function(){
@@ -383,8 +416,7 @@ def home():
             </script>
         </body>
         </html>
-    """, nodes_data=nodes_data, max_x=max_x, max_y=max_y)
-
+    """, nodes_data=nodes_data, max_x=max_x, max_y=max_y, debug_mode=DEBUG_MODE)
 
 
 # Funzione per inviare una richiesta di cambio colore al server Erlang tramite TCP
@@ -442,7 +474,9 @@ def run_server():
     draw_matrix()  # Disegna inizialmente la matrice
     socketio.run(app, debug=True)
 
-# Esecuzione principale del server: disegna la matrice e avvia il server con WebSocket
+# Avvio del server
 if __name__ == "__main__":
     draw_matrix()  # Disegna la matrice all'avvio del server
     socketio.run(app, debug=True, use_reloader=False)
+
+
