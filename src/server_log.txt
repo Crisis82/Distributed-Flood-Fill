@@ -1636,3 +1636,11 @@ Node <0.131.0> has already completed setup previously.
 Node <0.132.0> has completed setup with nodes: [<0.132.0>]
 Node <0.133.0> has completed setup with nodes: [<0.133.0>]
 Setup completed for all nodes.
+Server started.
+Received request to start node setup.
+Node <0.119.0> has completed setup with nodes: [<0.119.0>]
+Node <0.120.0> has completed setup with nodes: [<0.120.0>]
+Node <0.121.0> has completed setup with nodes: [<0.121.0>]
+Node <0.122.0> has completed setup with nodes: [<0.126.0>,<0.122.0>]
+Node <0.123.0> has completed setup with nodes: [<0.123.0>]
+Node <0.124.0> has completed setup with nodes: [<0.124.0>]

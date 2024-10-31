@@ -7,10 +7,7 @@
     start_phase2_for_all_leaders/2,
     save_leader_configuration_json/1
 ]).
-
-%% Record definitions
--record(node, {x, y, parent, children = [], time, leaderID, pid, neighbors = []}).
--record(leader, {node, color, serverID, adjClusters = [], nodes_in_cluster = []}).
+-include("node.hrl").
 
 %% Avvia il processo del server e registra l'inizio nel log
 %% Output:
@@ -33,13 +30,14 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
         {start_setup, NewNodes} ->
             log_operation("Received request to start node setup."),
             case NewNodes of
-                [] -> % Nessun nodo da processare
+                % Nessun nodo da processare
+                [] ->
                     log_operation("No nodes to process");
-                [#leader{node = Node} = Leader | Rest] -> % Processa il primo nodo e passa al resto
+                % Processa il primo nodo e passa al resto
+                [#leader{node = Node} = Leader | Rest] ->
                     Node#node.pid ! {setup_server_request, self()},
                     server_loop(Rest, ProcessedNodes ++ [Leader], LeadersData)
             end;
-
         %% Gestione del messaggio {FromNode, node_setup_complete, CombinedPIDs, Color}
         %% ricevuto dai nodi al completamento del setup
         {FromNode, node_setup_complete, CombinedPIDs, Color} ->
@@ -51,16 +49,17 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
                 FromNode, #{color => Color, nodes => CombinedPIDs}, LeadersData
             ),
             case Nodes of
-                [] -> % Tutti i nodi sono stati configurati
+                % Tutti i nodi sono stati configurati
+                [] ->
                     log_operation("Setup completed for all nodes."),
                     io:format("Setup Phase 1 completed.~n~n LeadersData: ~p~n", [LeadersData1]),
                     % Avvia la Fase 2 per tutti i leader
                     start_phase2_for_all_leaders(LeadersData1, []);
-                [#leader{node = Node} = Leader | RestNodes] -> % Passa al prossimo nodo da configurare
+                % Passa al prossimo nodo da configurare
+                [#leader{node = Node} = Leader | RestNodes] ->
                     Node#node.pid ! {setup_server_request, self()},
                     server_loop(RestNodes, ProcessedNodes ++ [Leader], LeadersData1)
             end;
-
         %% Gestione del messaggio {FromNode, node_already_visited}
         %% che indica che un nodo è già stato configurato
         {FromNode, node_already_visited} ->
@@ -68,15 +67,16 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
                 io_lib:format("Node ~p has already completed setup previously.", [FromNode])
             ),
             case Nodes of
-                [] -> % Se tutti i nodi sono stati configurati
+                % Se tutti i nodi sono stati configurati
+                [] ->
                     log_operation("Setup completed for all nodes."),
                     io:format("Setup Phase 1 completed. LeadersData: ~p~n", [LeadersData]),
                     start_phase2_for_all_leaders(LeadersData, []);
-                [#leader{node = Node} = Leader | RestNodes] -> % Passa al prossimo nodo da configurare
+                % Passa al prossimo nodo da configurare
+                [#leader{node = Node} = Leader | RestNodes] ->
                     Node#node.pid ! {setup_server_request, self()},
                     server_loop(RestNodes, ProcessedNodes ++ [Leader], LeadersData)
             end;
-
         %% Gestione dei messaggi non previsti
         _Other ->
             log_operation("Received unhandled message."),
@@ -111,10 +111,12 @@ leader_to_json(LeadersData, LeaderPid) ->
     NodesJson = nodes_to_json(maps:get(nodes, Cluster)),
     % Converte il PID del leader in stringa
     LeaderPidStr = pid_to_string(LeaderPid),
-    
+
     % Costruisce e restituisce la stringa JSON del leader
-    io_lib:format("{\"leader_id\": \"~s\", \"adjacent_clusters\": ~s, \"color\": \"~s\", \"nodes\": ~s}",
-                  [LeaderPidStr, AdjacentClustersJson, Color, NodesJson]).
+    io_lib:format(
+        "{\"leader_id\": \"~s\", \"adjacent_clusters\": ~s, \"color\": \"~s\", \"nodes\": ~s}",
+        [LeaderPidStr, AdjacentClustersJson, Color, NodesJson]
+    ).
 
 %% Funzione per convertire i cluster adiacenti in una lista JSON
 %% Input:
@@ -151,8 +153,6 @@ pid_to_string(Pid) ->
 %% - La rappresentazione dell’atomo come stringa
 atom_to_string(Atom) when is_atom(Atom) -> atom_to_list(Atom);
 atom_to_string(Other) -> Other.
-
-
 
 %% Funzione per registrare le operazioni del server
 %% Input:
@@ -191,13 +191,12 @@ start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
             file:write_file("leaders_data.json", JsonData),
             % Notifica il server loop che la Fase 2 è terminata
             self() ! phase2_done;
-
         % Se ci sono leader rimanenti, processa il primo PID rimanente
-        [LeaderPid | _ ] ->
+        [LeaderPid | _] ->
             % Ottiene le informazioni del leader corrente dal dizionario LeadersData
             LeaderInfo = maps:get(LeaderPid, LeadersData),
             NodesInCluster = maps:get(nodes, LeaderInfo),
-            
+
             % Log di avvio della Fase 2 per il leader corrente
             io:format("~n ------------------------------------- ~n"),
             io:format("~n Server starting Phase 2 for Leader PID: ~p~n", [LeaderPid]),
@@ -205,10 +204,10 @@ start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
             io:format("Server sending start_phase2 to Leader PID: ~p with nodes: ~p~n", [
                 LeaderPid, NodesInCluster
             ]),
-            
+
             % Invia il messaggio di avvio della Fase 2 al leader corrente
             LeaderPid ! {start_phase2, NodesInCluster},
-            
+
             % Attende la risposta dal leader
             receive
                 % Gestisce la risposta di completamento della Fase 2 dal leader
@@ -216,18 +215,17 @@ start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
                     % Aggiorna `LeadersData` con le informazioni sui cluster adiacenti ricevute dal leader
                     UpdatedLeaderInfo = maps:put(adjacent_clusters, AdjacentClusters, LeaderInfo),
                     UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),
-                    
+
                     % Log delle informazioni dei cluster adiacenti ricevute dal leader
                     io:format(
                         "Server received adjacent clusters info from Leader PID: ~p with clusters: ~p~n",
                         [LeaderPid, AdjacentClusters]
                     ),
-                    
+
                     io:format(
                         "Per il momento ho: ~p~n",
                         [UpdatedLeadersData]
                     ),
-
 
                     % Richiama `start_phase2_for_all_leaders` per continuare con il prossimo leader
                     start_phase2_for_all_leaders(UpdatedLeadersData, [LeaderPid | ProcessedLeaders])

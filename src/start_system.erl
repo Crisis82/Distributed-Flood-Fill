@@ -1,11 +1,9 @@
 %% start_system.erl
 -module(start_system).
 -export([start/2]).
+-include("node.hrl").
 
 -define(palette, [red, green, blue, yellow, orange, purple, pink, brown, black, white]).
-
--record(node, {x, y, parent, children = [], time, leaderID, pid, neighbors = []}).
--record(leader, {node, color, serverID, adjClusters = [], nodes_in_cluster = []}).
 
 %% Funzione principale che avvia il sistema, il server e i nodi, imposta la sincronizzazione e salva i dati dei nodi.
 %% Input:
@@ -46,7 +44,6 @@ start(N, M) ->
 
     io:format("Sono start_system e ho finito di creare nodi.~n"),
 
-    
     %% Itera attraverso ciascun nodo nella lista `Nodes`, assegna i vicini e aggiorna il campo neighbors
     UpdatedNodes = lists:map(
         fun(#leader{node = Node} = Leader) ->
@@ -65,7 +62,11 @@ start(N, M) ->
             UpdatedLeader = Leader#leader{node = UpdatedNode},
 
             %% Invia i vicini al processo nodo
-            io:format("Sono il start_system ~p e invio a PID: ~p il messaggio: {neighbors, ~p}~n", [self(), Pid, Neighbors]),
+            io:format(
+                "Sono il start_system ~p e invio a PID: ~p il messaggio: {neighbors, ~p}~n", [
+                    self(), Pid, Neighbors
+                ]
+            ),
             Pid ! {neighbors, Neighbors},
 
             %% Restituisce il Leader aggiornato
@@ -73,7 +74,6 @@ start(N, M) ->
         end,
         Nodes
     ),
-
 
     io:format("Sono start_system e ho assegnato i vicini ai nodi.~n"),
 
@@ -84,7 +84,6 @@ start(N, M) ->
     io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
     time_server:start(UpdatedNodes),
 
-
     %% Dopo aver ricevuto tutti gli ACK, invia il setup al server
     io:format("Tutti gli ACK ricevuti, avvio il setup dei nodi con il server.~n"),
 
@@ -93,8 +92,7 @@ start(N, M) ->
     io:format("Nodes = ~p~n", [UpdatedNodes]),
     save_nodes_data(UpdatedNodes),
 
-
-     %% Stampa delle informazioni dei nodi creati
+    %% Stampa delle informazioni dei nodi creati
     io:format("I seguenti nodi sono stati creati:.~n"),
     lists:foreach(
         fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
@@ -112,7 +110,6 @@ start(N, M) ->
         UpdatedNodes
     ),
 
-
     % Invia i nodi al server per completare il setup
     io:format("Invio messaggio {start_setup, ~p} a ~p.~n", [UpdatedNodes, ServerPid]),
     ServerPid ! {start_setup, UpdatedNodes},
@@ -122,8 +119,6 @@ start(N, M) ->
     % tcp_server:start().
 
     io:format("FINITO").
-    
-
 
 %% Funzione che salva i dati dei nodi in un file JSON con tutti i campi
 %% Input:
@@ -175,14 +170,24 @@ node_to_json(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors, Color, Serv
 
     io_lib:format(
         "{\"x\": ~s, \"y\": ~s, \"parent\": \"~s\", \"children\": ~s, \"time\": \"~s\", \"leaderID\": \"~s\", \"pid\": \"~s\", \"neighbors\": ~s, \"color\": \"~s\", \"serverID\": \"~s\", \"adjClusters\": ~s}",
-        [XStr, YStr, ParentStr, io_lib:format("~p", [ChildrenStr]), TimeStr, LeaderIDStr, PidStr,
-         io_lib:format("~p", [NeighborsStr]), ColorStr, ServerIDStr, io_lib:format("~p", [AdjClustersStr])]
+        [
+            XStr,
+            YStr,
+            ParentStr,
+            io_lib:format("~p", [ChildrenStr]),
+            TimeStr,
+            LeaderIDStr,
+            PidStr,
+            io_lib:format("~p", [NeighborsStr]),
+            ColorStr,
+            ServerIDStr,
+            io_lib:format("~p", [AdjClustersStr])
+        ]
     ).
 
 %% Funzione di utilità per convertire un PID in una stringa per il JSON
 pid_to_string(Pid) ->
     lists:flatten(io_lib:format("~p", [Pid])).
-
 
 %% Loop che attende tutti gli ACK dai nodi per completare la configurazione
 %% Input:

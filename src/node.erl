@@ -6,12 +6,9 @@
     new_node/3,
     new_leader/5
 ]).
+-include("node.hrl").
 
-%% Record definitions
--record(node, {x, y, parent, children = [], time, leaderID, pid, neighbors = []}).
--record(leader, {node, color, serverID, adjClusters = [], nodes_in_cluster = []}).
-
-%% new_node/8
+%% new_node/3
 %% Creates a basic node with the given parameters, including its PID and neighbors.
 new_node(X, Y, Parent) ->
     #node{
@@ -20,7 +17,7 @@ new_node(X, Y, Parent) ->
         parent = Parent
     }.
 
-%% new_leader/4
+%% new_leader/5
 %% Creates a leader node, assigns its own PID as the leaderID, and initializes neighbors.
 new_leader(X, Y, Color, ServerPid, StartSystemPid) ->
     % Step 1: Create a base node with an initial PID and empty neighbors
@@ -33,7 +30,7 @@ new_leader(X, Y, Color, ServerPid, StartSystemPid) ->
     UpdatedLeader = create_node(Leader, StartSystemPid),
     UpdatedLeader.
 
-%% create_node/1
+%% create_node/2
 %% Spawns a process for a node, initializing it with its own leaderID and empty neighbors.
 create_node(Leader, StartSystemPid) ->
     % Spawn the process for the node loop
@@ -252,12 +249,12 @@ node_loop(Leader, StartSystemPid, Visited) ->
                 StartSystemPid,
                 Visited
             );
-        %% Updates the parent
-        {parent_update, NewParent} ->
-            UpdatedNode = Leader#node{parent = NewParent},
+        %% Updates the leaderID
+        {leader_update, NewLeader} ->
+            UpdatedNode = Leader#node{leaderID = NewLeader},
             lists:foreach(
                 fun(child) ->
-                    child ! {parent_update, NewParent}
+                    child ! {leader_update, NewLeader}
                 end,
                 Leader#node.children
             ),
@@ -319,7 +316,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
             %% Propagates the leaderID update
             lists:foreach(
                 fun(child) ->
-                    child ! {parent_update, FromPid}
+                    child ! {leader_update, FromPid}
                 end,
                 Leader#leader.node#node.children
             ),
@@ -434,7 +431,7 @@ node_loop_propagate(
     %% Se il nodo era leader, aggiorna il nodo interno
     if
         is_record(Leader, leader) ->
-            UpdatedLeader = Leader#leader{node = Node},
+            UpdatedLeader = Leader#leader{node = Node};
         true ->
             UpdatedLeader = Node
     end,
@@ -539,27 +536,38 @@ wait_for_ack_from_neighbors(
 %% Output:
 %% - Lista aggiornata dei leader ID distinti per i cluster adiacenti
 gather_adjacent_clusters([], _LeaderID, AccumulatedClusters) ->
-    AccumulatedClusters;  % Restituisce la lista finale senza duplicati
-
+    % Restituisce la lista finale senza duplicati
+    AccumulatedClusters;
 gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters) ->
     Pid ! {get_leader_info, self()},
     receive
         {leader_info, NeighborLeaderID, NeighborColor} ->
-            io:format("~p -> Ho ricevuto la risposta da ~p e mi ha mandato: ~p.~n", [self(), Pid, NeighborLeaderID, NeighborColor],
+            io:format("~p -> Ho ricevuto la risposta da ~p e mi ha mandato: {~p,~p}.~n", [
+                self(), Pid, NeighborLeaderID, NeighborColor
+            ]),
             %% Se il leaderID è diverso, aggiungilo alla lista
-            UpdatedClusters = case NeighborLeaderID =/= LeaderID of
-                true -> [{NeighborLeaderID, NeighborColor} | AccumulatedClusters];
-                false -> AccumulatedClusters
-            end,
-            io:format("Per ora ho ~p e mi rimangono : ~p ~n",[UpdatedClusters, Rest]),
+            UpdatedClusters =
+                case NeighborLeaderID =/= LeaderID of
+                    true -> [{NeighborLeaderID, NeighborColor} | AccumulatedClusters];
+                    false -> AccumulatedClusters
+                end,
+            io:format("Per ora ho ~p e mi rimangono : ~p ~n", [UpdatedClusters, Rest]),
             gather_adjacent_clusters(Rest, LeaderID, UpdatedClusters)
-    after 5000 ->  % Timeout opzionale
+        % Timeout opzionale
+    after 5000 ->
         gather_adjacent_clusters(Rest, LeaderID, AccumulatedClusters)
     end.
 
 %% Custom merge because Erlang lists:merge doesn't suit our needs
 custom_merge(AdjClusters, []) ->
-    AdjClusters.
+    AdjClusters;
 custom_merge(AdjClusters, [NeighborAdjCluster | RestNeighborAdjClusters]) ->
     %% TODO: check for duplicates, otherwise append
+    UpdatedAdjClusters =
+        case lists:member(NeighborAdjCluster, AdjClusters) of
+            true ->
+                AdjClusters;
+            false ->
+                lists:append(AdjClusters, [NeighborAdjCluster])
+        end,
     custom_merge(UpdatedAdjClusters, RestNeighborAdjClusters).

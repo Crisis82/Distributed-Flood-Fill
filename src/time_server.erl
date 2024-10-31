@@ -1,9 +1,7 @@
 %% time-server.erl
 -module(time_server).
 -export([start/1]).
-
--record(node, {x, y, parent, children = [], time, leaderID, pid, neighbors = []}).
--record(leader, {node, color, serverID, adjClusters = [], nodes_in_cluster = []}).
+-include("node.hrl").
 
 %% start/1
 %% Inizia la sincronizzazione del tempo per tutti i nodi in Nodes.
@@ -23,7 +21,7 @@ sync_time(Nodes) ->
         fun(Element) ->
             % Controlla il tipo di record e ottieni il PID appropriato
             case Element of
-                #leader{} -> 
+                #leader{} ->
                     % Se è un leader, prendi il PID dal nodo interno
                     Pid = Element#leader.node#node.pid;
                 #node{} ->
@@ -41,3 +39,4 @@ sync_time(Nodes) ->
 
     % Richiama ricorsivamente per continuare la sincronizzazione
     sync_time(Nodes).
+
