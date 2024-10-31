@@ -277,14 +277,22 @@ node_loop(Leader, StartSystemPid, Visited) ->
         %% The leader changes the color of the cluster
         {color_change, Timestamp, NewColor} ->
             if
+                % Default case
                 Timestamp > Leader#leader.last_timestamp ->
                     io:format("Leader (~p, ~p) accepted the color change request.~n", [
                         Leader#leader.node#node.x, Leader#leader.node#node.y
                     ]),
                     UpdatedLeader = changeColor(Leader, Timestamp, NewColor);
-                true ->
+                % Case 1 of cuncurrency
+                Timestamp < Leader#leader.last_timestamp andalso
+                    lists:member({_, NewColor}, Leader#leader.adjClusters) ->
+                    io:format("Recover of the operation.~n"),
+                    UpdatedLeader = Leader;
+                % Case 2 of cuncurrency
+                Timestamp < Leader#leader.last_timestamp ->
                     io:format("The color change request is declined. Reason: OLD_TIMESTAMP.~n"),
                     UpdatedLeader = Leader
+                % Case 3
             end,
             node_loop(
                 UpdatedLeader, StartSystemPid, Visited
