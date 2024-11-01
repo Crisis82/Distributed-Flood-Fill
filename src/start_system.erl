@@ -116,9 +116,9 @@ start(N, M) ->
 
     % Avvia il server TCP per la visualizzazione
     % io:format("Avvio il tcp_server per visualizzare i nodi.~n").
-    % tcp_server:start().
+    tcp_server:start().
 
-    io:format("FINITO").
+    % io:format("FINITO").
 
 %% Funzione che salva i dati dei nodi in un file JSON con tutti i campi
 %% Input:

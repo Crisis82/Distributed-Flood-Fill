@@ -103,11 +103,14 @@ def draw_matrix():
     leaders_data = load_leaders_data()
     nodes_data = load_nodes_data()
     
-    # Trova le dimensioni massime della griglia in base alle coordinate dei nodi
+    # Creiamo un set dei PID dei leader
+    leader_pids = {leader_data["leader_id"] for leader_data in leaders_data}
+    
+    # Trova le dimensioni massime della griglia
     max_x = max(node["x"] for node in nodes_data)
     max_y = max(node["y"] for node in nodes_data)
 
-    # Crea una figura di Matplotlib con dimensione 8x8 pollici
+    # Crea la figura di Matplotlib
     fig = Figure(figsize=(8, 8))
     ax = fig.add_subplot(111)
     
@@ -117,33 +120,33 @@ def draw_matrix():
     ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
     ax.grid(False)
     
-    # Crea una mappa di posizione per i nodi in base alle loro coordinate (x, y) e pid
+    # Crea una mappa di posizione per i nodi
     position_map = {(node["x"], node["y"]): node["pid"] for node in nodes_data}
 
-    # Disegna ogni nodo sulla griglia
+    # Disegna ogni nodo
     for node in nodes_data:
         x, y, pid = node["x"], node["y"], node["pid"]
-        color = get_node_color(pid, leaders_data)  # Ottiene il colore del nodo
-        rgb = color_to_rgb(color)  # Converte il colore in formato RGB
+        color = get_node_color(pid, leaders_data)
+        rgb = color_to_rgb(color)
 
-        # Aggiunge un rettangolo per rappresentare il nodo sulla griglia
+        # Aggiunge un rettangolo per il nodo
         ax.add_patch(Rectangle((y - 1, max_x - x), 1, 1, color=rgb, ec="black"))
-
-        # Disegna linee tra nodi adiacenti dello stesso cluster
+        
+        # Disegna connessioni tra nodi dello stesso cluster
         draw_cluster_connections(ax, x, y, pid, position_map, leaders_data, max_x, max_y)
 
-        # Determina il colore del testo (bianco su sfondi scuri, nero su sfondi chiari)
+        # Determina il colore del testo
         text_color = "white" if is_dark_color(rgb) else "black"
-        
-        # Aggiunge solo le coordinate del nodo nella modalità normale
+
+        # Aggiunge le coordinate del nodo
         ax.text(y - 0.5, max_x - x + 0.3, f"({x},{y})", ha="center", va="center", color=text_color, fontsize=8, weight="bold")
-        
-        # Aggiunge il PID solo in modalità debug
+
+        # Aggiunge il PID in modalità debug
         if DEBUG_MODE:
             ax.text(y - 0.5, max_x - x + 0.7, f"{pid}", ha="center", va="center", color=text_color, fontsize=8, weight="bold")
-        
-        # Se il nodo è un leader, aggiunge una "L" accanto al PID
-        if pid in leaders_data:
+
+        # **Aggiunge la "L" se il nodo è un leader**
+        if pid in leader_pids:
             label_color = "white" if is_dark_color(rgb) else "black"
             ax.text(y - 0.5, max_x - x + 0.5, "L", ha="center", va="center", color=label_color, fontsize=14, weight="bold")
 
@@ -151,7 +154,7 @@ def draw_matrix():
     ax.set_xlim(0, max_y)
     ax.set_ylim(0, max_x)
     
-    # Salva l'immagine della matrice senza margini
+    # Salva l'immagine della matrice
     fig.savefig(IMG_PATH, bbox_inches='tight', pad_inches=0)
     fig.clear()
 
@@ -354,10 +357,11 @@ def home():
                 }
             </style>
         </head>
+        
         <body>
             <h1>Matrice dei Nodi</h1>
             <p>Aggiornata automaticamente ogni 30 secondi o quando rileva modifiche.</p>
-            
+
             <div class="matrix-container">
                 <img src="/matrix" alt="Matrix" style="display: block;">
                 <div class="grid-overlay">
@@ -368,8 +372,12 @@ def home():
             </div>
 
             <form method="POST" action="/change_color" id="colorForm">
-                <label id="selectedLabel">{{ "PID Selezionato:" if debug_mode else "Coordinate Selezionate:" }}</label>
-                <input type="text" id="selection" name="selection" readonly>
+                <label>PID Selezionato:</label>
+                <input type="text" id="selection_pid" name="pid" readonly>
+
+
+                <label>Coordinate Selezionate:</label>
+                <input type="text" id="selection_coordinates" name="selection_coordinates" readonly>
 
                 <label for="color">Colore:</label>
                 <select id="color" name="color">
@@ -396,22 +404,21 @@ def home():
                     window.location.reload();
                 });
 
-                const selectionInput = document.getElementById('selection');
-                const debugMode = {{ 'true' if debug_mode else 'false' }};
+                const selectionPidInput = document.getElementById('selection_pid');
+                const selectionCoordinatesInput = document.getElementById('selection_coordinates');
                 
                 function selectNode(pid, x, y) {
-                    if (debugMode) {
-                        selectionInput.value = pid;  // Mostra il PID in modalità debug
-                    } else {
-                        selectionInput.value = `(${x},${y})`;  // Mostra solo le coordinate in modalità normale
-                    }
+                    selectionPidInput.value = pid;  // Imposta il PID
+                    selectionCoordinatesInput.value = `(${x},${y})`;  // Imposta le coordinate
                 }
 
                 setTimeout(function(){
-                   window.location.reload(1);
+                    window.location.reload(1);
                 }, 30000);
             </script>
         </body>
+
+        
         </html>
     """, nodes_data=nodes_data, max_x=max_x, max_y=max_y, debug_mode=DEBUG_MODE)
 
@@ -423,25 +430,24 @@ def home():
 # Output:
 # - Restituisce True se la comunicazione con Erlang è riuscita e ha confermato il cambio colore con "ok"
 # - Restituisce False se si verifica un errore di connessione o Erlang non conferma con "ok"
-def send_color_change_request(pid, color):
+def send_color_change_request(node_id, color):
+
+    if node_id is None:
+        print("Errore: node_id è None, impossibile inviare la richiesta")
+        return False
+
     try:
-        # Crea una connessione TCP con il server Erlang sulla porta specificata
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(('localhost', 8080))  # Configura host e porta del server Erlang
-            
-            # Prepara il messaggio da inviare al server Erlang nel formato "pid,colore"
-            message = f"{pid},{color}"
-            s.sendall(message.encode('utf-8'))  # Invia il messaggio codificato in UTF-8
-            
-            # Riceve la risposta dal server Erlang e decodifica il messaggio
+            s.connect(('localhost', 8080))  # Assicurati che l'host e la porta siano corretti
+            message = f"{node_id},{color}"  # Usa node_id al posto di pid
+            print(f"Inviando il messaggio: {message}")  # Debug
+            s.sendall(message.encode('utf-8'))
             response = s.recv(1024).decode('utf-8')
-            
-            # Se la risposta è "ok", il cambio di colore è riuscito; altrimenti fallisce
             return response == "ok"
     except Exception as e:
-        # Gestisce eventuali errori di comunicazione e stampa un messaggio di errore
         print(f"Errore nella comunicazione con Erlang: {e}")
         return False
+
 
 # Endpoint HTTP per gestire il cambio colore di un nodo
 # Input:
@@ -455,6 +461,8 @@ def change_color():
     # Estrae i parametri "pid" e "color" dalla richiesta POST
     pid = request.form.get('pid')
     color = request.form.get('color')
+
+    print(f"ricevo {pid} e {color}")
 
     # Invia la richiesta di cambio colore al server Erlang tramite TCP
     if send_color_change_request(pid, color):

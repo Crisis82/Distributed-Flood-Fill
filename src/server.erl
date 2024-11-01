@@ -4,7 +4,7 @@
     start_server/0,
     server_loop/3,
     log_operation/1,
-    start_phase2_for_all_leaders/2,
+    start_phase2_for_all_leaders/4,
     save_leader_configuration_json/1
 ]).
 -include("node.hrl").
@@ -32,7 +32,8 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
             case NewNodes of
                 % Nessun nodo da processare
                 [] ->
-                    log_operation("No nodes to process");
+                    log_operation("No nodes to process"),
+                    server_loop(Nodes, ProcessedNodes, LeadersData);
                 % Processa il primo nodo e passa al resto
                 [#leader{node = Node} = Leader | Rest] ->
                     Node#node.pid ! {setup_server_request, self()},
@@ -54,7 +55,7 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
                     log_operation("Setup completed for all nodes."),
                     io:format("Setup Phase 1 completed.~n~n LeadersData: ~p~n", [LeadersData1]),
                     % Avvia la Fase 2 per tutti i leader
-                    start_phase2_for_all_leaders(LeadersData1, []);
+                    start_phase2_for_all_leaders(Nodes, ProcessedNodes, LeadersData1, []);
                 % Passa al prossimo nodo da configurare
                 [#leader{node = Node} = Leader | RestNodes] ->
                     Node#node.pid ! {setup_server_request, self()},
@@ -71,18 +72,41 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
                 [] ->
                     log_operation("Setup completed for all nodes."),
                     io:format("Setup Phase 1 completed. LeadersData: ~p~n", [LeadersData]),
-                    start_phase2_for_all_leaders(LeadersData, []);
+                    start_phase2_for_all_leaders(Nodes, ProcessedNodes, LeadersData, []);
                 % Passa al prossimo nodo da configurare
                 [#leader{node = Node} = Leader | RestNodes] ->
                     Node#node.pid ! {setup_server_request, self()},
                     server_loop(RestNodes, ProcessedNodes ++ [Leader], LeadersData)
             end;
         %% Gestione dei messaggi non previsti
+
+        {change_color_complete, LeaderPid, Color, Time} ->
+            % Log dell'operazione di cambio colore completata
+            io:format(
+                io_lib:format("Leader PID ~p ha completato il cambio colore in ~p al timestamp ~p", [LeaderPid, Color, Time])
+            ),
+
+            % Aggiorna il colore del leader in LeadersData
+            LeaderInfo = maps:get(LeaderPid, LeadersData, #{}),
+            UpdatedLeaderInfo = maps:put(color, Color, LeaderInfo),
+            UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),
+
+            io:format("~n~nNuova configurazione ~p~n", [UpdatedLeadersData]),
+
+
+            % Salva leaders_data.json con i dati aggiornati
+            JsonData = save_leader_configuration_json(UpdatedLeadersData),
+            file:write_file("leaders_data.json", JsonData),
+            io:format("Aggiornato e salvato leaders_data.json dopo cambio colore per Leader PID ~p.~n", [LeaderPid]),
+
+            % Continua il ciclo con i dati aggiornati
+            server_loop(Nodes, ProcessedNodes, UpdatedLeadersData);
+
         _Other ->
             log_operation("Received unhandled message."),
             server_loop(Nodes, ProcessedNodes, LeadersData)
     end.
-finish_setup(LeadersData) ->
+finish_setup(Nodes, ProcessedNodes, LeadersData) ->
     io:format("SETUP COMPLETATO PER TUTTI I NODI~n"),
     io:format("Chiedo a tutti i nodi di salvare le loro informazioni su DB locali~n"),
 
@@ -98,7 +122,9 @@ finish_setup(LeadersData) ->
             LeaderPid ! {save_to_db, self()}
         end,
         LeaderPids
-    ).
+    ),
+    io:format("LeadersData : ~p", [LeadersData]),
+    server_loop(Nodes, ProcessedNodes, LeadersData).
 
 %% Funzione che salva la configurazione dei leader in formato JSON
 %% Input:
@@ -198,7 +224,7 @@ log_operation(Message) ->
 %% - ProcessedLeaders: lista dei leader già processati nella Fase 2
 %% Output:
 %% - Nessun output diretto; aggiorna `LeadersData` con i cluster adiacenti e salva i risultati in JSON
-start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
+start_phase2_for_all_leaders(Nodes, ProcessedNodes ,LeadersData, ProcessedLeaders) ->
     % Filtra i leader non ancora processati nella Fase 2
     RemainingLeaders = maps:filter(
         fun(Key, _) -> not lists:member(Key, ProcessedLeaders) end, LeadersData
@@ -215,7 +241,7 @@ start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
             JsonData = save_leader_configuration_json(LeadersData),
             file:write_file("leaders_data.json", JsonData),
             io:format("Dati dei leader salvasti in leaders_data.json ~n"),
-            finish_setup(LeadersData);
+            finish_setup(Nodes, ProcessedNodes , LeadersData);
         % Se ci sono leader rimanenti, processa il primo PID rimanente
         [LeaderPid | _] ->
             % Ottiene le informazioni del leader corrente dal dizionario LeadersData
@@ -253,13 +279,13 @@ start_phase2_for_all_leaders(LeadersData, ProcessedLeaders) ->
                     ),
 
                     % Richiama `start_phase2_for_all_leaders` per continuare con il prossimo leader
-                    start_phase2_for_all_leaders(UpdatedLeadersData, [LeaderPid | ProcessedLeaders])
+                    start_phase2_for_all_leaders(Nodes, ProcessedNodes, UpdatedLeadersData, [LeaderPid | ProcessedLeaders])
             after 5000 ->
                 % Timeout: nessuna risposta dal leader entro 5 secondi
                 io:format("Timeout waiting for Phase 2 completion from Leader PID: ~p~n", [
                     LeaderPid
                 ]),
                 % Riprova con il leader successivo mantenendo invariato `LeadersData`
-                start_phase2_for_all_leaders(LeadersData, ProcessedLeaders)
+                start_phase2_for_all_leaders(Nodes, ProcessedNodes, LeadersData, ProcessedLeaders)
             end
     end.
