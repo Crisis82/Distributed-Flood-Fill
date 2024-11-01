@@ -7,7 +7,8 @@ start() ->
     % Crea un socket in ascolto sulla porta 8080, configurato per ricevere dati in modalità binaria
     {ok, ListenSocket} = gen_tcp:listen(8080, [binary, {packet, 0}, {active, false}]),
     io:format("Server in ascolto su porta 8080~n"),
-    accept(ListenSocket).  % Chiama la funzione di accettazione delle connessioni
+    % Chiama la funzione di accettazione delle connessioni
+    accept(ListenSocket).
 
 % Funzione di accettazione delle connessioni TCP
 % Accetta nuove connessioni in modo ricorsivo e avvia un processo separato per gestirle
@@ -34,20 +35,24 @@ loop(Socket) ->
                     try
                         Pid = list_to_pid(PidStr),
                         io:format("Ho ricevuto il PID: ~p e colore: ~p~n", [Pid, Color]),
-                        
+
                         % Invia un messaggio di conferma al client
                         % (Qui è commentato, ma si potrebbe inviare un messaggio al PID)
                         % Pid ! {change_color, Color},
-                        gen_tcp:send(Socket, "ok")  % Conferma con "ok" al client
+
+                        % Conferma con "ok" al client
+                        gen_tcp:send(Socket, "ok")
                     catch
                         % Gestisce eventuali errori di conversione del PID
                         _:_ ->
                             io:format("Errore nella conversione del PID~n"),
-                            gen_tcp:send(Socket, "error")  % Invia "error" al client in caso di fallimento
+                            % Invia "error" al client in caso di fallimento
+                            gen_tcp:send(Socket, "error")
                     end;
                 _ ->
                     io:format("Errore nella struttura dei dati ricevuti~n"),
-                    gen_tcp:send(Socket, "error")  % Invio "error" se il formato è errato
+                    % Invio "error" se il formato è errato
+                    gen_tcp:send(Socket, "error")
             end,
             % Chiude il socket dopo aver inviato la risposta
             gen_tcp:close(Socket);

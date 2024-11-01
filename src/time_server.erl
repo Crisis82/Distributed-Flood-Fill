@@ -39,4 +39,3 @@ sync_time(Nodes) ->
 
     % Richiama ricorsivamente per continuare la sincronizzazione
     sync_time(Nodes).
-

@@ -1,30 +1,37 @@
 -module(node).
 -export([
     create_node/2,
-    node_loop/3,
+    leader_loop/3,
     node_loop_propagate/7,
-    new_node/3,
+    new_node/8,
     new_leader/5
 ]).
 -include("node.hrl").
 
-%% new_node/3
+%% new_node/8
 %% Creates a basic node with the given parameters, including its PID and neighbors.
-new_node(X, Y, Parent) ->
+new_node(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors) ->
     #node{
         x = X,
         y = Y,
-        parent = Parent
+        parent = Parent,
+        children = Children,
+        time = Time,
+        leaderID = LeaderID,
+        pid = Pid,
+        neighbors = Neighbors
     }.
 
 %% new_leader/5
 %% Creates a leader node, assigns its own PID as the leaderID, and initializes neighbors.
 new_leader(X, Y, Color, ServerPid, StartSystemPid) ->
     % Step 1: Create a base node with an initial PID and empty neighbors
-    Node = new_node(X, Y, ServerPid),
+    Node = new_node(X, Y, ServerPid, [], undefined, undefined, undefined, []),
 
     % Step 2: Create the leader record with the initial node
-    Leader = #leader{node = Node, color = Color, serverID = ServerPid},
+    Leader = #leader{
+        node = Node, color = Color, serverID = ServerPid, adjClusters = [], nodes_in_cluster = []
+    },
 
     % Step 3: Start the node process and update leaderID and pid fields
     UpdatedLeader = create_node(Leader, StartSystemPid),
@@ -35,7 +42,7 @@ new_leader(X, Y, Color, ServerPid, StartSystemPid) ->
 create_node(Leader, StartSystemPid) ->
     % Spawn the process for the node loop
     Pid = spawn(fun() ->
-        node_loop(Leader, StartSystemPid, false)
+        leader_loop(Leader, StartSystemPid, false)
     end),
 
     % Update leaderID and pid in the node
@@ -48,16 +55,16 @@ create_node(Leader, StartSystemPid) ->
     Pid ! {aggiorna_leader, UpdatedLeader},
     UpdatedLeader.
 
-%% node_loop/3
+%% leader_loop/3
 %% Main node loop to receive messages and update state.
-node_loop(Leader, StartSystemPid, Visited) ->
+leader_loop(Leader, StartSystemPid, Visited) ->
     io:format("Sono il nodo (~p, ~p) con PID ~p e sono pronto per ricevere nuovi messaggi!!~n", [
         Leader#leader.node#node.x, Leader#leader.node#node.y, self()
     ]),
 
     receive
         {aggiorna_leader, NewLeader} ->
-            node_loop(NewLeader, StartSystemPid, Visited);
+            leader_loop(NewLeader, StartSystemPid, Visited);
         {neighbors, Neighbors} ->
             io:format("Node (~p, ~p) received neighbors: ~p~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y, Neighbors
@@ -79,7 +86,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
 
             StartSystemPid ! {ack_neighbors, self()},
 
-            node_loop(
+            leader_loop(
                 UpdatedLeader, StartSystemPid, Visited
             );
         %% Sincronizzazione del tempo dal server
@@ -96,7 +103,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                 ]
             ),
 
-            node_loop(
+            leader_loop(
                 UpdatedLeader,
                 StartSystemPid,
                 Visited
@@ -112,7 +119,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                         [Leader#leader.node#node.x, Leader#leader.node#node.y]
                     ),
                     FromPid ! {self(), node_already_visited},
-                    node_loop(
+                    leader_loop(
                         Leader,
                         StartSystemPid,
                         Visited
@@ -153,10 +160,11 @@ node_loop(Leader, StartSystemPid, Visited) ->
                     UpdatedNode = Leader#leader.node#node{
                         parent = FromPid, leaderID = PropagatedLeaderID
                     },
+                    UpdatedLeader = Leader#leader{node = UpdatedNode},
 
                     node_loop_propagate(
                         %% Becames a simple node
-                        UpdatedNode,
+                        UpdatedLeader,
                         Leader#leader.color,
                         FromPid,
                         %% Set visited status to true
@@ -174,7 +182,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                         ]
                     ),
                     FromPid ! {self(), node_already_visited},
-                    node_loop(
+                    leader_loop(
                         %% Already visited, so it doesn't change the type
                         Leader,
                         StartSystemPid,
@@ -186,7 +194,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                         Leader#leader.node#node.x, Leader#leader.node#node.y, Leader#leader.color
                     ]),
                     FromPid ! {self(), ack_propagation_different_color},
-                    node_loop(
+                    leader_loop(
                         %% Different color, thus the node can be a leader of another cluster
                         Leader,
                         StartSystemPid,
@@ -198,32 +206,30 @@ node_loop(Leader, StartSystemPid, Visited) ->
             ServerPid = Leader#leader.serverID,
             X = Leader#leader.node#node.x,
             Y = Leader#leader.node#node.y,
-            Neighbors = Leader#leader.node#node.neighbors,
+            InitialNeighbors = Leader#leader.node#node.neighbors,
             LeaderID = Leader#leader.node#node.leaderID,
+
             io:format("Leader Node (~p, ~p) starting Phase 2.~n", [X, Y]),
 
-            %% Invia messaggio {get_leader_info, self()} a ciascun vicino e raccoglie le risposte
-            AllAdjacentClusters = gather_adjacent_clusters(Neighbors, LeaderID, []),
-
-            io:format("AllAdjacentClusters : ~p ~n", [AllAdjacentClusters]),
-
-            io:format("Nodi cluster: ~p ~n", [NodePIDs]),
-
-            %% Invia messaggio a ciascun nodo nel cluster `NodePIDs` per verificare cluster adiacenti
-            FinalAdjacentClusters = gather_adjacent_clusters(
-                NodePIDs, LeaderID, AllAdjacentClusters
+            %% Usa `gather_adjacent_clusters` per raccogliere informazioni evitando messaggi inutili
+            {AllAdjacentClusters, NeighborsList} = gather_adjacent_clusters(
+                InitialNeighbors, LeaderID, [], []
             ),
 
-            io:format("FinalAdjacentClusters : ~p ~n", [FinalAdjacentClusters]),
+            io:format("AllAdjacentClusters: ~p~nNeighborsList: ~p~n", [
+                AllAdjacentClusters, NeighborsList
+            ]),
 
-            %% Invia i cluster adiacenti finali al server
-            ServerPid ! {self(), phase2_complete, LeaderID, FinalAdjacentClusters},
+            %% Invia il messaggio ai nodi del cluster con le informazioni finali
+            ServerPid ! {self(), phase2_complete, LeaderID, AllAdjacentClusters},
 
+            %% Aggiorna il leader con le informazioni raccolte e i nuovi neighbors
+            UpdatedNode = Leader#leader.node#node{neighbors = NeighborsList},
             UpdatedLeader = Leader#leader{
-                nodes_in_cluster = NodePIDs, adjClusters = FinalAdjacentClusters
+                node = UpdatedNode, nodes_in_cluster = NodePIDs, adjClusters = AllAdjacentClusters
             },
 
-            node_loop(
+            leader_loop(
                 UpdatedLeader,
                 StartSystemPid,
                 Visited
@@ -234,7 +240,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                 self(), FromPid
             ]),
             FromPid ! {leader_info, Leader#leader.node#node.leaderID, Leader#leader.color},
-            node_loop(
+            leader_loop(
                 Leader,
                 StartSystemPid,
                 Visited
@@ -244,11 +250,42 @@ node_loop(Leader, StartSystemPid, Visited) ->
             UpdatedChildren = [ChildPid | Leader#leader.node#node.children],
             UpdatedNode = Leader#leader.node#node{children = UpdatedChildren},
             UpdatedLeader = Leader#leader{node = UpdatedNode},
-            node_loop(
+            leader_loop(
                 UpdatedLeader,
                 StartSystemPid,
                 Visited
             );
+        {save_to_db, ServerPid} ->
+            % Procedura per salvare le informazioni su DB locale
+            save_to_local_db(Leader),
+            ServerPid ! {ack_save_to_db, self()},
+
+            % Crea una lista dei nodi nel cluster escludendo il PID del leader
+            FilteredNodes = lists:filter(
+                fun(NodePid) -> NodePid =/= Leader#leader.node#node.pid end,
+                Leader#leader.nodes_in_cluster
+            ),
+
+            % Invia richiesta di salvataggio a tutti i nodi in FilteredNodes
+            lists:foreach(
+                fun(NodePid) ->
+                    NodePid ! {save_to_db_node}
+                end,
+                FilteredNodes
+            ),
+
+            % Continua il loop
+            leader_loop(
+                Leader,
+                StartSystemPid,
+                Visited
+            );
+        {save_to_db_node} ->
+            % Salva solo i dati del nodo in un file JSON locale
+            Node = Leader#leader.node,
+            save_to_local_db_node(Node),
+            node_loop(Node, StartSystemPid, Visited);
+        
         %% Updates the leaderID
         {leader_update, NewLeader} ->
             UpdatedNode = Leader#node{leaderID = NewLeader},
@@ -258,7 +295,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                 end,
                 Leader#node.children
             ),
-            node_loop(
+            leader_loop(
                 UpdatedNode,
                 StartSystemPid,
                 Visited
@@ -277,22 +314,20 @@ node_loop(Leader, StartSystemPid, Visited) ->
         %% The leader changes the color of the cluster
         {color_change, Timestamp, NewColor} ->
             if
-                % Default case
                 Timestamp > Leader#leader.last_timestamp ->
-                    io:format("Leader (~p, ~p) accepted the color change request.~n", [
-                        Leader#leader.node#node.x, Leader#leader.node#node.y
-                    ]),
                     UpdatedLeader = changeColor(Leader, Timestamp, NewColor);
-                % Case 1 of cuncurrency
-                Timestamp < Leader#leader.last_timestamp andalso
-                    lists:member({_, NewColor}, Leader#leader.adjClusters) ->
-                    io:format("Recover of the operation.~n"),
-                    UpdatedLeader = Leader;
-                % Case 2 of cuncurrency
                 Timestamp < Leader#leader.last_timestamp ->
-                    io:format("The color change request is declined. Reason: OLD_TIMESTAMP.~n"),
-                    UpdatedLeader = Leader
-                % Case 3
+                    case lists:any(fun({_, Color}) -> Color =:= NewColor end, Leader#leader.adjClusters) of
+                        true -> 
+                            %% Operazione se troviamo un cluster adiacente con lo stesso colore
+                            io:format("Un cluster adiacente ha lo stesso colore ~p, operazione di recupero.~n", [NewColor]),
+                            UpdatedLeader = Leader;
+                        false ->
+                            %% Operazione se non troviamo un cluster adiacente con lo stesso colore
+                            io:format("Nessun cluster adiacente con colore ~p, continuando normalmente.~n", [NewColor]),
+                            UpdatedLeader = changeColor(Leader, Timestamp, NewColor)
+                    end
+
             end,
             node_loop(
                 UpdatedLeader, StartSystemPid, Visited
@@ -316,7 +351,7 @@ node_loop(Leader, StartSystemPid, Visited) ->
                 UpdatedLeader, StartSystemPid, Visited
             );
         %% Merge request from another cluster
-        {merge_request, Timestamp, FromPid} ->
+        {merge_request, _Timestamp, FromPid} ->
             io:format("Node (~p, ~p) received a merge request from ~p.~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid
             ]),
@@ -354,10 +389,116 @@ node_loop(Leader, StartSystemPid, Visited) ->
             io:format("Node (~p, ~p) received an unhandled message.~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y
             ]),
-            node_loop(
+            leader_loop(
                 Leader, StartSystemPid, Visited
             )
     end.
+node_loop(Node, _StartSystemPid, _Visited) ->
+    io:format("~p -> Sono il nodo (~p, ~p) con PID ~p e sono associato al Leader ~p~n", [
+        self(),
+        Node#node.x,
+        Node#node.y,
+        Node#node.pid,
+        Node#node.leaderID
+    ]).
+
+%% Funzione per salvare i dati di un nodo in un file JSON locale
+save_to_local_db_node(Node) ->
+    % Ottieni le coordinate X e Y per costruire il nome del file
+    X = Node#node.x,
+    Y = Node#node.y,
+    Filename = io_lib:format("DB/~p_~p_node.json", [X, Y]),
+
+    % Crea la cartella DB se non esiste
+    filelib:ensure_dir(Filename),
+
+    % Costruisci i dati JSON del nodo in formato stringa
+    JsonData = io_lib:format(
+        "{\n\"pid\": \"~s\", \"x\": ~p, \"y\": ~p, \"parent\": \"~s\", \"children\": ~s, \"time\": \"~s\", \"leader_id\": \"~s\", \"neighbors\": ~s\n}",
+        [
+            pid_to_string(Node#node.pid),
+            X,
+            Y,
+            pid_to_string(Node#node.parent),
+            convert_node_list(Node#node.children),
+            format_time(Node#node.time),
+            pid_to_string(Node#node.leaderID),
+            convert_adj_clusters(Node#node.neighbors)
+        ]
+    ),
+
+    % Salva i dati JSON in un file locale
+    file:write_file(Filename, lists:flatten(JsonData)),
+    io:format("Dati del nodo salvati in: ~s~n", [Filename]).
+
+%% Funzione di supporto per formattare il tempo in una stringa "HH:MM:SS"
+format_time({Hour, Minute, Second}) ->
+    io_lib:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]);
+format_time(undefined) ->
+    "undefined".
+
+%% Funzione per salvare i dati di Leader in un file JSON locale
+save_to_local_db(Leader) ->
+    Node = Leader#leader.node,
+
+    % Ottieni le coordinate X e Y per costruire il nome del file
+    X = Node#node.x,
+    Y = Node#node.y,
+    Filename = io_lib:format("DB/~p_~p.json", [X, Y]),
+
+    % Crea la cartella DB se non esiste
+    filelib:ensure_dir(Filename),
+
+    % Ottieni il tempo come stringa formattata "HH:MM:SS"
+    TimeFormatted = format_time(Node#node.time),
+
+    % Costruisci i dati JSON del leader e del nodo associato in formato stringa
+    JsonData = io_lib:format(
+        "{\n\"leader_id\": \"~s\", \"color\": \"~s\", \"server_id\": \"~s\", \"adj_clusters\": ~s, \"nodes_in_cluster\": ~s,\n" ++
+            "\"node\": {\n\"x\": ~p, \"y\": ~p, \"parent\": \"~s\", \"children\": ~s, \"time\": ~p, \"leader_id\": \"~s\", \"pid\": \"~s\", \"neighbors\": ~s\n}}",
+        [
+            pid_to_string(Node#node.pid),
+            atom_to_string(Leader#leader.color),
+            pid_to_string(Leader#leader.serverID),
+            convert_adj_clusters(Leader#leader.adjClusters),
+            convert_node_list(Leader#leader.nodes_in_cluster),
+            X,
+            Y,
+            pid_to_string(Node#node.parent),
+            convert_node_list(Node#node.children),
+            TimeFormatted,
+            pid_to_string(Node#node.leaderID),
+            pid_to_string(Node#node.pid),
+            convert_adj_clusters(Node#node.neighbors)
+        ]
+    ),
+
+    % Salva i dati JSON in un file locale
+    file:write_file(Filename, lists:flatten(JsonData)),
+    io:format("Dati di Leader (~p,~p) con PID ~p salvati in: ~s~n", [X, Y, self(), Filename]).
+
+%% Funzione helper per convertire la lista di cluster adiacenti in formato JSON-friendly
+convert_adj_clusters(AdjClusters) ->
+    JsonClusters = [
+        io_lib:format(
+            "{\"pid\": \"~s\", \"color\": \"~s\", \"leader_id\": \"~s\"}",
+            [pid_to_string(Pid), atom_to_string(Color), pid_to_string(LeaderID)]
+        )
+     || {Pid, Color, LeaderID} <- AdjClusters
+    ],
+    "[" ++ string:join(JsonClusters, ",") ++ "]".
+
+%% Funzione helper per convertire la lista di nodi in formato JSON-friendly
+convert_node_list(Nodes) ->
+    JsonNodes = [io_lib:format("\"~s\"", [pid_to_string(NodePid)]) || NodePid <- Nodes],
+    "[" ++ string:join(JsonNodes, ",") ++ "]".
+
+%% Funzione per convertire un PID in stringa
+pid_to_string(Pid) -> erlang:pid_to_list(Pid).
+
+%% Funzione per convertire un atomo in una stringa JSON-friendly
+atom_to_string(Atom) when is_atom(Atom) -> atom_to_list(Atom);
+atom_to_string(Other) -> Other.
 
 %% Funzione per propagare il messaggio di setup e gestire la cascata
 %% Input:
@@ -378,13 +519,7 @@ node_loop_propagate(
     InitiatorFlag,
     StartSystemPid
 ) ->
-    %% Checks if the node is a leader
-    if
-        is_record(Leader, leader) ->
-            Node = Leader#leader.node;
-        true ->
-            Node = Leader
-    end,
+    Node = Leader#leader.node,
 
     io:format("Node (~p, ~p) is propagating as leader with ID: ~p and color: ~p.~n", [
         Node#node.x, Node#node.y, Node#node.leaderID, Color
@@ -436,17 +571,9 @@ node_loop_propagate(
             ),
             FromPid ! {self(), ack_propagation_same_color, CombinedPIDs}
     end,
-
-    %% Se il nodo era leader, aggiorna il nodo interno
-    if
-        is_record(Leader, leader) ->
-            UpdatedLeader = Leader#leader{node = Node};
-        true ->
-            UpdatedLeader = Node
-    end,
-
     %% Continua il ciclo principale del nodo con lo stato aggiornato
-    node_loop(
+    UpdatedLeader = Leader#leader{node = Node},
+    leader_loop(
         UpdatedLeader, StartSystemPid, Visited
     ).
 
@@ -544,27 +671,40 @@ wait_for_ack_from_neighbors(
 %% - AccumulatedClusters: lista dei leader ID già accumulati
 %% Output:
 %% - Lista aggiornata dei leader ID distinti per i cluster adiacenti
-gather_adjacent_clusters([], _LeaderID, AccumulatedClusters) ->
-    % Restituisce la lista finale senza duplicati
-    AccumulatedClusters;
-gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters) ->
+%% Funzione per inviare il messaggio e raccogliere i leader ID distinti dai vicini
+%% evitando messaggi inutili se i dati sono già presenti in `neighbors`.
+%% Funzione aggiornata per raccogliere le informazioni sui neighbors
+gather_adjacent_clusters([], _LeaderID, AccumulatedClusters, NeighborsList) ->
+    {AccumulatedClusters, NeighborsList}; % Restituisce la lista finale dei neighbors e clusters senza duplicati
+
+gather_adjacent_clusters([{Pid, NeighborColor, NeighborLeaderID} | Rest], LeaderID, AccumulatedClusters, NeighborsList) ->
+    % Controlla se il vicino ha un LeaderID diverso e aggiungilo a clusters e neighbors
+    UpdatedClusters =
+        case NeighborLeaderID =/= LeaderID of
+            true -> [{Pid, NeighborColor, NeighborLeaderID} | AccumulatedClusters];
+            false -> AccumulatedClusters
+        end,
+    UpdatedNeighborsList = [{Pid, NeighborColor, NeighborLeaderID} | NeighborsList],
+    gather_adjacent_clusters(Rest, LeaderID, UpdatedClusters, UpdatedNeighborsList);
+
+gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters, NeighborsList) ->
+    %% Se il vicino non è già nel formato {Pid, Color, LeaderID}, invia richiesta per ottenere le informazioni
     Pid ! {get_leader_info, self()},
     receive
         {leader_info, NeighborLeaderID, NeighborColor} ->
-            io:format("~p -> Ho ricevuto la risposta da ~p e mi ha mandato: {~p,~p}.~n", [
+            io:format("~p -> Ho ricevuto la risposta da ~p con LeaderID: ~p e Color: ~p.~n", [
                 self(), Pid, NeighborLeaderID, NeighborColor
             ]),
-            %% Se il leaderID è diverso, aggiungilo alla lista
+            % Aggiungi come neighbor solo se ha un LeaderID diverso
             UpdatedClusters =
                 case NeighborLeaderID =/= LeaderID of
-                    true -> [{NeighborLeaderID, NeighborColor} | AccumulatedClusters];
+                    true -> [{Pid, NeighborColor, NeighborLeaderID} | AccumulatedClusters];
                     false -> AccumulatedClusters
                 end,
-            io:format("Per ora ho ~p e mi rimangono : ~p ~n", [UpdatedClusters, Rest]),
-            gather_adjacent_clusters(Rest, LeaderID, UpdatedClusters)
-        % Timeout opzionale
+            UpdatedNeighborsList = [{Pid, NeighborColor, NeighborLeaderID} | NeighborsList],
+            gather_adjacent_clusters(Rest, LeaderID, UpdatedClusters, UpdatedNeighborsList)
     after 5000 ->
-        gather_adjacent_clusters(Rest, LeaderID, AccumulatedClusters)
+        gather_adjacent_clusters(Rest, LeaderID, AccumulatedClusters, NeighborsList)
     end.
 
 changeColor(Leader, Timestamp, NewColor) ->
