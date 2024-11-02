@@ -80,27 +80,59 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
             end;
         %% Gestione dei messaggi non previsti
 
-        {change_color_complete, LeaderPid, Color, Time} ->
-            % Log dell'operazione di cambio colore completata
-            io:format(
-                io_lib:format("Leader PID ~p ha completato il cambio colore in ~p al timestamp ~p", [LeaderPid, Color, Time])
-            ),
+        {change_color_complete, LeaderPid, Leader} ->
+            io:format("SERVER: ho ricevuto la nuova configurazione di ~p: ~p~n~n", [Leader#leader.node#node.leaderID, Leader]),
 
-            % Aggiorna il colore del leader in LeadersData
-            LeaderInfo = maps:get(LeaderPid, LeadersData, #{}),
-            UpdatedLeaderInfo = maps:put(color, Color, LeaderInfo),
+            Color = Leader#leader.color,
+            AdjC = Leader#leader.adjClusters,
+            NodesInCluster = Leader#leader.nodes_in_cluster,
+
+            ValidNodesInCluster = 
+                case is_list(NodesInCluster) of
+                    true -> NodesInCluster;
+                    false -> []
+                end,
+
+            io:format("Leader PID ~p ha come nuovo colore ~p, come nuovi AdjCluster ~p e come nodi nel cluster ~p~n", [
+                LeaderPid, Color, AdjC, ValidNodesInCluster
+            ]),
+
+            % Log dell'operazione di cambio colore completata
+            io:format("Leader PID ~p ha completato il cambio colore in ~p~n", [LeaderPid, Color]),
+
+            % Inizializza LeaderInfo come mappa con i campi di base, se non esiste già
+            LeaderInfo = maps:get(LeaderPid, LeadersData, #{color => undefined, adjacent_clusters => [], nodes => []}),
+
+            % Aggiorna LeaderInfo con i nuovi dati
+            LeaderInfo1 = maps:put(color, Color, LeaderInfo),
+            LeaderInfo2 = maps:put(adjacent_clusters, AdjC, LeaderInfo1),
+            UpdatedLeaderInfo = maps:put(nodes, ValidNodesInCluster, LeaderInfo2),
+
+
+            % Aggiorna LeadersData con la nuova configurazione del leader
             UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),
 
             io:format("~n~nNuova configurazione ~p~n", [UpdatedLeadersData]),
 
-
-            % Salva leaders_data.json con i dati aggiornati
             JsonData = save_leader_configuration_json(UpdatedLeadersData),
             file:write_file("leaders_data.json", JsonData),
-            io:format("Aggiornato e salvato leaders_data.json dopo cambio colore per Leader PID ~p.~n", [LeaderPid]),
 
             % Continua il ciclo con i dati aggiornati
             server_loop(Nodes, ProcessedNodes, UpdatedLeadersData);
+
+        {remove_myself_from_leaders, LeaderPid} ->
+            % Rimuove LeaderPid da LeadersData
+            UpdatedLeadersData = maps:remove(LeaderPid, LeadersData),
+            
+            JsonData = save_leader_configuration_json(UpdatedLeadersData),
+            file:write_file("leaders_data.json", JsonData),
+
+            io:format("SERVER: Rimosso Leader PID ~p da LeadersData. Nuova configurazione: ~p~n", [LeaderPid, UpdatedLeadersData]),
+
+            % Continua il ciclo del server con LeadersData aggiornato
+            server_loop(Nodes, ProcessedNodes, UpdatedLeadersData);
+
+
 
         _Other ->
             log_operation("Received unhandled message."),

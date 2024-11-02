@@ -306,7 +306,7 @@ leader_loop(Leader, StartSystemPid, Visited) ->
                 StartSystemPid,
                 Visited
             );
-        {change_color, PID, Color, Time} ->
+        {change_color, PID, Color, _Time} ->
             io:format(
                 "Node (~p, ~p) ha ricevuto una richiesta di cambio colore da ~p e cambia il colore a ~p.~n",
                 [
@@ -318,21 +318,9 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             UpdatedLeader = Leader#leader{color = Color},
 
             %% Notifica ai vicini il cambio di colore
-            notify_neighbors_of_color_change(Leader#leader.node#node.neighbors, Color),
+            notify_neighbors_of_color_change(UpdatedLeader, Color, StartSystemPid, Visited);
 
-            %% Segnala al server il cambio di colore
-            io:format("Il nodo ~p invia change_color_complete a server.~n", [
-                self()
-            ]),
-
-            Leader#leader.serverID ! {change_color_complete, self(), Color, Time},
-
-            %% Continua il ciclo con il colore aggiornato
-            leader_loop(
-                UpdatedLeader,
-                StartSystemPid,
-                Visited
-            );
+            
         {color_adj_update, FromPid, Color} ->
             io:format("Nodo (~p, ~p) ha ricevuto color_adj_update da ~p con nuovo colore ~p.~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid, Color
@@ -346,70 +334,333 @@ leader_loop(Leader, StartSystemPid, Visited) ->
 
             %% Continua il ciclo con lo stato aggiornato
             leader_loop(UpdatedLeader, StartSystemPid, Visited);
-        {merge_request_from_small_ID, FromLeaderPid} ->
-            io:format(
-                "Received merge_request_from_small_ID from ~p. Relinquishing leadership to ~p.~n", [
-                    FromLeaderPid
-                ]
-            ),
-            % Send cluster data to the sender
-            FromLeaderPid ! {cluster_data, self(), Leader},
-            % Update nodes to have new leader ID
-            update_nodes_leader_id(Leader#leader.nodes_in_cluster, FromLeaderPid),
-            % Become a regular node
-            node_loop(
-                update_to_regular_node(Leader#leader.node, FromLeaderPid), StartSystemPid, Visited
-            );
-        {cluster_data, FromLeaderPid, FromLeaderData} ->
+        {cluster_data, _FromLeaderPid, FromLeaderData} ->
             % Merge clusters
             UpdatedLeader = merge_clusters(Leader, FromLeaderData),
             % Continue as leader
             leader_loop(UpdatedLeader, StartSystemPid, Visited);
-        {merge_request_from_greater_ID, FromLeaderPid} ->
+        %% Gestisco richiesta di merge da un leader con ID minore
+        %% io ho ID maggiore
+        {merge_request_from_small_ID, LeaderIDMinore} ->
             io:format(
-                "Received merge_request_from_greater_ID from ~p. Accepting merge and keeping leadership.~n",
-                [FromLeaderPid]
+                "~p -> Richiesta di merge da ID minore verso ID maggiore ricevuta da ~p.~n", [
+                    self(), LeaderIDMinore
+                ]
             ),
-            % Request cluster data from sender
-            FromLeaderPid ! {cluster_data_request, self()},
+
+            % Inform cluster about the leader update
+            lists:foreach(
+                fun(NodePid) ->
+                    io:format("Sending leader_update to ~p con nuovo leader ~p.~n", [
+                        NodePid, LeaderIDMinore
+                    ]),
+                    NodePid ! {leader_update, LeaderIDMinore}
+                end,
+                Leader#leader.nodes_in_cluster
+            ),
+
+            % Send current nodes_in_cluster and adjClusters to the new leader
+            LeaderIDMinore !
+                {response_to_merge, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters},
+
+            io:format("Sending response_to_merge to ~p con ~p e ~p.~n", [
+                        LeaderIDMinore, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
+                    ]),
+
+            % Update the leaderID of the current node
+            Node = Leader#leader.node,
+            UpdatedNode = Node#node{leaderID = LeaderIDMinore},
+
+
+            Leader#leader.serverID ! {remove_myself_from_leaders, self()},
+
+            % lists:foreach(
+            %    fun({pid, _NeighborColor, _NeighborLeaderID}) ->
+            %        io:format("Sending remove_myself_from_leaders to ~p.~n", [
+            %            pid
+            %        ]),
+            %        pid ! {remove_myself_from_leaders, LeaderIDMinore}
+            %    end,
+            %    Leader#leader.adjClusters
+            % ),
+            
+
+            % Transform into a regular node and start the node loop
+            node_loop(UpdatedNode, StartSystemPid, Visited);
+        
+        
+        % io ho ID minore
+        %% Gestione della richiesta di merge da un leader con ID maggiore
+        {merge_request_from_greater_ID, LeaderIDMaggiore} ->
+            LeaderIDMaggiore ! {ack_ok_merge, self()},
             receive
-                {cluster_data, FromLeaderPid, FromLeaderData} ->
-                    % Merge clusters
-                    UpdatedLeader = merge_clusters(Leader, FromLeaderData),
-                    % Update nodes in merged cluster
-                    update_nodes_leader_id(FromLeaderData#leader.nodes_in_cluster, self()),
-                    % Notify sender it is now a regular node
-                    FromLeaderPid ! {merge_ack, self(), leader},
-                    % Inform neighbors
-                    notify_neighbors_of_color_change(
-                        UpdatedLeader#leader.node#node.neighbors, UpdatedLeader#leader.color
+                {leaderData, _PID, Nodes_in_Cluster, AdjListIDMaggiore} ->
+                    UpdatedAdjClusters = join_adj_clusters(Leader#leader.adjClusters, AdjListIDMaggiore),
+                    FilteredAdjClusters = lists:filter(
+                        fun({_, _, LeaderID}) -> 
+                            LeaderID =/= Leader#leader.node#node.leaderID 
+                            andalso LeaderID =/= LeaderIDMaggiore
+                        end,
+                        UpdatedAdjClusters
                     ),
-                    % Notify server
-                    UpdatedLeader#leader.serverID ! {cluster_merge_complete, self(), UpdatedLeader},
-                    % Continue as leader
-                    leader_loop(UpdatedLeader, StartSystemPid, Visited)
+                    UpdatedNodeList = join_nodes_list(Leader#leader.nodes_in_cluster, Nodes_in_Cluster),
+                    UpdatedLeader = Leader#leader{
+                        adjClusters = FilteredAdjClusters,
+                        nodes_in_cluster = UpdatedNodeList
+                    },
+
+                    io:format("~p -> Pirma ero ~p ~n~n e ora mi sono aggiornato in : ~p ~n" , [self(), Leader,  UpdatedLeader]),
+                    
+                    lists:foreach(
+                        fun({PID, _NeighborColor, LeaderID}) ->
+                            io:format("Sending color_adj_update to ~p.~n", [LeaderID]),
+                            LeaderID ! {color_adj_update, self(), UpdatedLeader#leader.color}
+                        end,
+                        UpdatedLeader#leader.adjClusters
+                    ),
+                    leader_loop(Leader, StartSystemPid, Visited)
             after 5000 ->
-                io:format("Timeout waiting for cluster data from ~p~n", [FromLeaderPid]),
-                leader_loop(Leader, StartSystemPid, Visited)
+                io:format("Timeout nella richiesta di merge da leader con ID maggiore a leader con ID minore.~n")
             end;
-        {cluster_data_request, ToLeaderPid} ->
-            % Send cluster data
-            ToLeaderPid ! {cluster_data, self(), Leader},
-            % Update nodes to have new leader ID
-            update_nodes_leader_id(Leader#leader.nodes_in_cluster, ToLeaderPid),
-            % Become a regular node
-            node_loop(
-                update_to_regular_node(Leader#leader.node, ToLeaderPid), StartSystemPid, Visited
-            );
-        %% Unhandled messages
-        _Other ->
-            io:format("Node (~p, ~p) received an unhandled message.~n", [
-                Leader#leader.node#node.x, Leader#leader.node#node.y
+        
+
+
+        %% Gestione della risposta al merge per il leader con ID maggiore
+        {response_to_merge, NodesInCluster, AdjClustersMinore} ->
+            io:format(
+                "~p -> Ricevuta response_to_merge da leader con ID minore.~n",
+                [self()]
+            ),
+
+            % Aggiorna il leaderID al nuovo leader con ID minore
+            NewLeaderID = Leader#leader.node#node.leaderID,
+            UpdatedNode = Leader#leader.node#node{leaderID = NewLeaderID},
+
+            % Unisce le liste di nodi e cluster adiacenti
+            UpdatedNodesInCluster = join_nodes_list(Leader#leader.nodes_in_cluster, NodesInCluster),
+            UpdatedAdjClusters = join_adj_clusters(Leader#leader.adjClusters, AdjClustersMinore),
+
+            % Aggiorna lo stato del leader
+            UpdatedLeader = Leader#leader{
+                node = UpdatedNode,
+                nodes_in_cluster = UpdatedNodesInCluster,
+                adjClusters = UpdatedAdjClusters
+            },
+
+            % Informa i propri nodi del nuovo leaderID
+            lists:foreach(
+                fun(NodePid) ->
+                    io:format("Inviando leader_update a ~p con nuovo leader ~p.~n", [
+                        NodePid, NewLeaderID
+                    ]),
+                    NodePid ! {leader_update, NewLeaderID}
+                end,
+                UpdatedLeader#leader.nodes_in_cluster
+            ),
+
+            % Invia `update_nodes_in_cluster` a tutti i nodi
+            lists:foreach(
+                fun(NodePid) ->
+                    io:format("Inviando update_nodes_in_cluster a ~p con leader ~p e colore ~p.~n", [
+                        NodePid, NewLeaderID, UpdatedLeader#leader.color
+                    ]),
+                    NodePid ! {update_nodes_in_cluster, UpdatedLeader#leader.nodes_in_cluster, NewLeaderID, UpdatedLeader#leader.color}
+                end,
+                UpdatedLeader#leader.nodes_in_cluster
+            ),
+
+            % Invia `color_adj_update` ai cluster adiacenti
+            lists:foreach(
+                fun({AdjClusterLeaderPid, _NeighborColor, _LeaderID}) ->
+                    io:format("Inviando color_adj_update a ~p.~n", [AdjClusterLeaderPid]),
+                    AdjClusterLeaderPid ! {color_adj_update, self(), UpdatedLeader#leader.color}
+                end,
+                UpdatedLeader#leader.adjClusters
+            ),
+
+            % Notifica al server di rimuovere se stesso dalla lista dei leader
+            Leader#leader.serverID ! {remove_myself_from_leaders, self()},
+
+            % Trasforma il leader in un nodo normale e avvia `node_loop`
+            node_loop(UpdatedNode, StartSystemPid, Visited);
+
+
+        {leader_update, new_leader} ->
+            Node = Leader#leader.node,
+            UpdatedNode = Node#node{leaderID = new_leader},
+
+            UpdatedLeader = Leader#leader{node = UpdatedNode},
+
+            leader_loop(UpdatedLeader, StartSystemPid, Visited);
+
+        {update_nodes_in_cluster, NodesInCluster, NewLeaderID, NewColor} ->
+            Node = Leader#leader.node,
+            Neighbors = Node#node.neighbors,
+
+            UpdatedNeighbors = lists:map(
+                fun({NeighborPid, _NeighborColor, _NeighborLeaderID} = Neighbor) ->
+                    case lists:member(NeighborPid, NodesInCluster) of
+                        true ->
+                            io:format("Updating neighbor ~p with new leader ~p and color ~p.~n", [
+                                NeighborPid, NewLeaderID, NewColor
+                            ]),
+                            {NeighborPid, NewColor, NewLeaderID};
+                        false ->
+                            Neighbor
+                    end
+                end,
+                Neighbors
+            ),
+
+            UpdatedNode = Node#node{neighbors = UpdatedNeighbors},
+            UpdatedLeader = Leader#leader{node = UpdatedNode},
+
+            leader_loop(UpdatedLeader, StartSystemPid, Visited);
+
+
+
+                %% Unhandled messages
+                _Other ->
+                    io:format("Node (~p, ~p) received an unhandled message.~n", [
+                        Leader#leader.node#node.x, Leader#leader.node#node.y
+                    ]),
+                    leader_loop(
+                        Leader, StartSystemPid, Visited
+                    )
+            end.
+
+%% Invio merge da leader con ID minore a leader con ID maggiore
+invio_merge_da_id_minore(Leader, LeaderPIDMaggiore) ->
+    LeaderPIDMaggiore ! {merge_request_from_small_ID, self()},
+    receive
+        {response_to_merge, Nodes_in_Cluster, AdjListIDMaggiore} ->
+            % Unisce i cluster adiacenti, rimuovendo eventuali duplicati
+            UpdatedAdjClusters = join_adj_clusters(Leader#leader.adjClusters, AdjListIDMaggiore),
+
+            % Rimuove se stesso e l'altro leader dalla lista dei cluster adiacenti
+            FilteredAdjClusters = lists:filter(
+                fun({_, _, LeaderID}) ->
+                    LeaderID =/= Leader#leader.node#node.leaderID andalso
+                        LeaderID =/= LeaderPIDMaggiore
+                end,
+                UpdatedAdjClusters
+            ),
+
+            % Unisce le liste dei nodi nel cluster
+            UpdatedNodeList = join_nodes_list(Leader#leader.nodes_in_cluster, Nodes_in_Cluster),
+
+            % Crea il nuovo leader aggiornato
+            UpdatedLeader = Leader#leader{
+                adjClusters = FilteredAdjClusters,
+                nodes_in_cluster = UpdatedNodeList
+            },
+
+            io:format("~p -> Pirma ero ~p ~n~n e ora mi sono aggiornato in : ~p ~n", [
+                self(), Leader, UpdatedLeader
             ]),
-            leader_loop(
-                Leader, StartSystemPid, Visited
-            )
+
+            % Invio il messaggio `update_nodes_in_cluster` con le informazioni corrette
+            % lists:foreach(
+            %     fun(NodePid) ->
+            %         io:format("Sending update_nodes_in_cluster to ~p with leader ~p and color ~p.~n", [
+            %             NodePid, UpdatedLeader#leader.node#node.leaderID, UpdatedLeader#leader.color
+            %         ]),
+            %         NodePid ! {update_nodes_in_cluster, UpdatedLeader#leader.nodes_in_cluster, UpdatedLeader#leader.node#node.leaderID, UpdatedLeader#leader.color}
+            %     end,
+            %     UpdatedLeader#leader.nodes_in_cluster
+            % ),
+
+            % Invia `color_adj_update` a ciascun cluster adiacente
+            lists:foreach(
+                fun({_PID, _NeighborColor, LeaderID}) ->
+                    io:format("Sending color_adj_update to ~p.~n", [LeaderID]),
+                    LeaderID ! {color_adj_update, self(), UpdatedLeader#leader.color}
+                end,
+                UpdatedLeader#leader.adjClusters
+            ),
+
+            UpdatedLeader;
+        _ ->
+            ok
+    after 5000 ->
+        io:format(
+            "Timeout nella richiesta di merge da leader con ID minore a leader con ID maggiore.~n"
+        )
     end.
+
+%%%%%%%%%%%%%%%%%%%%%%
+%%%%%% sistema %%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%
+
+%% io ho ID maggiore
+%% Invio merge da leader con ID maggiore a leader con ID minore
+invio_merge_da_id_maggiore(Leader, LeaderPIDMinore) ->
+    % Invia richiesta di merge al leader con ID minore
+    LeaderPIDMinore ! {merge_request_from_greater_ID, self()},
+
+    % Attende l'acknowledgment dal leader con ID minore
+    receive
+        {ack_ok_merge, PID} when PID == LeaderPIDMinore ->
+            % Definisce il nuovo leader ID
+            NewLeaderID = LeaderPIDMinore,
+
+            LeaderPIDMinore !
+                {leaderData, self(), Leader#leader.nodes_in_cluster, Leader#leader.adjClusters},
+
+            % Informa i propri nodi del nuovo leaderID
+            lists:foreach(
+                fun(NodePid) ->
+                    io:format("Inviando leader_update a ~p con nuovo leader ~p.~n", [
+                        NodePid, NewLeaderID
+                    ]),
+                    NodePid ! {leader_update, NewLeaderID}
+                end,
+                Leader#leader.nodes_in_cluster
+            ),
+
+            % Update the leaderID of the current node
+            Node = Leader#leader.node,
+            UpdatedNode = Node#node{leaderID = LeaderPIDMinore},
+
+            % Notifica al server di rimuovere se stesso dalla lista dei leader
+            Leader#leader.serverID ! {remove_myself_from_leaders, self()},
+
+            UpdatedNode;
+        _ ->
+            ok
+    after 5000 ->
+        io:format(
+            "Timeout nella richiesta di merge da leader con ID maggiore a leader con ID minore.~n"
+        )
+    end.
+
+%% Funzione di supporto per unire due liste di cluster adiacenti, evitando duplicati
+join_adj_clusters(AdjClusters1, AdjClusters2) ->
+    lists:usort(AdjClusters1 ++ AdjClusters2).
+
+%% Funzione di supporto per unire due liste di PID, evitando duplicati
+join_nodes_list(List1, List2) ->
+    % Verifica che entrambi gli input siano liste di PID
+    SafeList1 =
+        case is_pid_list(List1) of
+            true -> List1;
+            false -> []
+        end,
+    SafeList2 =
+        case is_pid_list(List2) of
+            true -> List2;
+            false -> []
+        end,
+    % Rimuove i duplicati usando usort per ottenere una lista unica
+    lists:usort(SafeList1 ++ SafeList2).
+
+%% Funzione di supporto per verificare se una lista contiene solo PID
+is_pid_list(List) ->
+    lists:all(fun erlang:is_pid/1, List).
+
+%% Funzione di supporto per trasformare un nodo in nodo normale con un nuovo leader
+update_to_regular_node(Node, NewLeaderPID) ->
+    Node#node{leaderID = NewLeaderPID}.
 
 merge_clusters(Leader1, Leader2) ->
     % Merge nodes_in_cluster, removing duplicates
@@ -432,61 +683,91 @@ merge_clusters(Leader1, Leader2) ->
     },
     UpdatedLeader.
 
-update_nodes_leader_id(NodePIDs, NewLeaderPid) ->
-    lists:foreach(
-        fun(NodePid) ->
-            NodePid ! {leader_update, NewLeaderPid}
-        end,
-        NodePIDs
-    ).
-update_to_regular_node(Node, NewLeaderPid) ->
-    Node#node{leaderID = NewLeaderPid}.
-
-notify_neighbors_of_color_change(Neighbors, Color) ->
+notify_neighbors_of_color_change(Leader, Color, StartSystemPid, Visited) ->
     Self = self(),
-    % Identify neighbors with the same color
+    ColorAtom =
+        if
+            is_atom(Color) -> Color;
+            true -> list_to_atom(Color)
+        end,
     SameColorNeighbors = [
         {NeighborPid, NeighborColor, LeaderID}
-     || {NeighborPid, NeighborColor, LeaderID} <- Neighbors,
-        NeighborColor == Color
+     || {NeighborPid, NeighborColor, LeaderID} <- Leader#leader.adjClusters,
+        NeighborColor == ColorAtom
     ],
+
+    io:format("Gli adjacents clusters sono ~p, quelli con il colore ~p sono: ~p.~n", [
+        Leader#leader.adjClusters, ColorAtom, SameColorNeighbors
+    ]),
+
     case SameColorNeighbors of
         [] ->
-            % No neighbors with the same color, send color_adj_update to all
             io:format(
-                "No neighbors with the same color. Sending color_adj_update to all neighbors.~n"
+                "Nessun vicino con lo stesso colore. Invio color_adj_update a tutti i vicini.~n"
             ),
             lists:foreach(
-                fun({NeighborPid, _NeighborColor, _LeaderID}) ->
-                    io:format("Sending color_adj_update to ~p.~n", [NeighborPid]),
-                    NeighborPid ! {color_adj_update, Self, Color}
+                fun({_NeighborPid, _NeighborColor, LeaderID}) ->
+                    io:format("Inviando color_adj_update a ~p.~n", [LeaderID]),
+                    LeaderID ! {color_adj_update, Self, ColorAtom}
                 end,
-                Neighbors
+                Leader#leader.adjClusters
+            ),
+            %% Segnala al server il cambio di colore
+            io:format("Il nodo ~p invia change_color_complete a server.~n", [
+                self()
+            ]),
+
+            Leader#leader.serverID ! {change_color_complete, self(), Leader},
+
+            %% Continua il ciclo con il colore aggiornato
+            leader_loop(
+                Leader,
+                StartSystemPid,
+                Visited
             );
         _ ->
-            % Neighbors with the same color exist
-            io:format("Neighbors with the same color found. Checking for merge possibilities.~n"),
+            io:format("Vicini con lo stesso colore trovati. Verifica possibilità di merge.~n"),
             lists:foreach(
                 fun({_NeighborPid, _NeighborColor, LeaderID}) ->
-                    % Compare Leader PIDs
-                    case erlang:compare(LeaderID, Self) of
-                        gt ->
-                            % Neighbor's LeaderID is greater, send merge_request_from_small_ID
-                            io:format("Sending merge_request_from_small_ID to Leader PID ~p.~n", [
-                                LeaderID
-                            ]),
-                            LeaderID ! {merge_request_from_small_ID, Self};
-                        lt ->
-                            % Self has greater ID, send merge_request_from_greater_ID
+                    case LeaderID of
+                        _ when LeaderID > Self ->
                             io:format(
-                                "Sending merge_request_from_greater_ID to Leader PID ~p.~n", [
+                                "Inviando merge_request_from_small_ID al leader con PID ~p.~n", [
                                     LeaderID
                                 ]
                             ),
-                            LeaderID ! {merge_request_from_greater_ID, Self};
-                        eq ->
-                            % If PIDs are equal, do nothing
-                            io:format("Same PID as Leader PID ~p; no merge required.~n", [LeaderID])
+                            UpdatedLeader = invio_merge_da_id_minore(Leader, LeaderID),
+
+                            io:format("Comunico al Server la mia nuova configurazione: ~p~n~n", [
+                                UpdatedLeader
+                            ]),
+
+                            UpdatedLeader#leader.serverID !
+                                {change_color_complete, self(), UpdatedLeader},
+
+                            %% Continua il ciclo con il colore aggiornato
+                            leader_loop(
+                                UpdatedLeader,
+                                StartSystemPid,
+                                Visited
+                            );
+                        _ when LeaderID < Self ->
+                            io:format(
+                                "Inviando merge_request_from_greater_ID al leader con PID ~p.~n", [
+                                    LeaderID
+                                ]
+                            ),
+
+                            %%%%%%%%%%%%%%%%%%%%%%
+                            %%%%%% sistema %%%%%%%
+                            %%%%%%%%%%%%%%%%%%%%%%
+
+                            UpdatedNode = invio_merge_da_id_maggiore(Leader, LeaderID),
+                            node_loop(UpdatedNode, StartSystemPid, Visited);
+                        _ ->
+                            io:format("Stesso PID del leader ~p; nessun merge richiesto.~n", [
+                                LeaderID
+                            ])
                     end
                 end,
                 SameColorNeighbors
