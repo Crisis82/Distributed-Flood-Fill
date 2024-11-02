@@ -44,6 +44,8 @@ create_node(Leader, StartSystemPid) ->
     Pid = spawn(fun() ->
         leader_loop(Leader, StartSystemPid, false)
     end),
+    %% Register the pid to the alias node_X_Y
+    %% register(list_to_atom(lists:flatten(io_lib:format("node_~p_~p",[Leader#leader.node#node.x, Leader#leader.node#node.y]))), Pid).
 
     % Update leaderID and pid in the node
     UpdatedNode = Leader#leader.node#node{leaderID = Pid, pid = Pid},
@@ -319,8 +321,6 @@ leader_loop(Leader, StartSystemPid, Visited) ->
 
             %% Notifica ai vicini il cambio di colore
             notify_neighbors_of_color_change(UpdatedLeader, Color, StartSystemPid, Visited);
-
-            
         {color_adj_update, FromPid, Color} ->
             io:format("Nodo (~p, ~p) ha ricevuto color_adj_update da ~p con nuovo colore ~p.~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid, Color
@@ -364,13 +364,12 @@ leader_loop(Leader, StartSystemPid, Visited) ->
                 {response_to_merge, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters},
 
             io:format("Sending response_to_merge to ~p con ~p e ~p.~n", [
-                        LeaderIDMinore, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
-                    ]),
+                LeaderIDMinore, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
+            ]),
 
             % Update the leaderID of the current node
             Node = Leader#leader.node,
             UpdatedNode = Node#node{leaderID = LeaderIDMinore},
-
 
             Leader#leader.serverID ! {remove_myself_from_leaders, self()},
 
@@ -383,34 +382,37 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             %    end,
             %    Leader#leader.adjClusters
             % ),
-            
 
             % Transform into a regular node and start the node loop
             node_loop(UpdatedNode, StartSystemPid, Visited);
-        
-        
         % io ho ID minore
         %% Gestione della richiesta di merge da un leader con ID maggiore
         {merge_request_from_greater_ID, LeaderIDMaggiore} ->
             LeaderIDMaggiore ! {ack_ok_merge, self()},
             receive
                 {leaderData, _PID, Nodes_in_Cluster, AdjListIDMaggiore} ->
-                    UpdatedAdjClusters = join_adj_clusters(Leader#leader.adjClusters, AdjListIDMaggiore),
+                    UpdatedAdjClusters = join_adj_clusters(
+                        Leader#leader.adjClusters, AdjListIDMaggiore
+                    ),
                     FilteredAdjClusters = lists:filter(
-                        fun({_, _, LeaderID}) -> 
-                            LeaderID =/= Leader#leader.node#node.leaderID 
-                            andalso LeaderID =/= LeaderIDMaggiore
+                        fun({_, _, LeaderID}) ->
+                            LeaderID =/= Leader#leader.node#node.leaderID andalso
+                                LeaderID =/= LeaderIDMaggiore
                         end,
                         UpdatedAdjClusters
                     ),
-                    UpdatedNodeList = join_nodes_list(Leader#leader.nodes_in_cluster, Nodes_in_Cluster),
+                    UpdatedNodeList = join_nodes_list(
+                        Leader#leader.nodes_in_cluster, Nodes_in_Cluster
+                    ),
                     UpdatedLeader = Leader#leader{
                         adjClusters = FilteredAdjClusters,
                         nodes_in_cluster = UpdatedNodeList
                     },
 
-                    io:format("~p -> Pirma ero ~p ~n~n e ora mi sono aggiornato in : ~p ~n" , [self(), Leader,  UpdatedLeader]),
-                    
+                    io:format("~p -> Pirma ero ~p ~n~n e ora mi sono aggiornato in : ~p ~n", [
+                        self(), Leader, UpdatedLeader
+                    ]),
+
                     lists:foreach(
                         fun({PID, _NeighborColor, LeaderID}) ->
                             io:format("Sending color_adj_update to ~p.~n", [LeaderID]),
@@ -420,11 +422,10 @@ leader_loop(Leader, StartSystemPid, Visited) ->
                     ),
                     leader_loop(Leader, StartSystemPid, Visited)
             after 5000 ->
-                io:format("Timeout nella richiesta di merge da leader con ID maggiore a leader con ID minore.~n")
+                io:format(
+                    "Timeout nella richiesta di merge da leader con ID maggiore a leader con ID minore.~n"
+                )
             end;
-        
-
-
         %% Gestione della risposta al merge per il leader con ID maggiore
         {response_to_merge, NodesInCluster, AdjClustersMinore} ->
             io:format(
@@ -461,10 +462,14 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             % Invia `update_nodes_in_cluster` a tutti i nodi
             lists:foreach(
                 fun(NodePid) ->
-                    io:format("Inviando update_nodes_in_cluster a ~p con leader ~p e colore ~p.~n", [
-                        NodePid, NewLeaderID, UpdatedLeader#leader.color
-                    ]),
-                    NodePid ! {update_nodes_in_cluster, UpdatedLeader#leader.nodes_in_cluster, NewLeaderID, UpdatedLeader#leader.color}
+                    io:format(
+                        "Inviando update_nodes_in_cluster a ~p con leader ~p e colore ~p.~n", [
+                            NodePid, NewLeaderID, UpdatedLeader#leader.color
+                        ]
+                    ),
+                    NodePid !
+                        {update_nodes_in_cluster, UpdatedLeader#leader.nodes_in_cluster,
+                            NewLeaderID, UpdatedLeader#leader.color}
                 end,
                 UpdatedLeader#leader.nodes_in_cluster
             ),
@@ -483,8 +488,6 @@ leader_loop(Leader, StartSystemPid, Visited) ->
 
             % Trasforma il leader in un nodo normale e avvia `node_loop`
             node_loop(UpdatedNode, StartSystemPid, Visited);
-
-
         {leader_update, new_leader} ->
             Node = Leader#leader.node,
             UpdatedNode = Node#node{leaderID = new_leader},
@@ -492,7 +495,6 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             UpdatedLeader = Leader#leader{node = UpdatedNode},
 
             leader_loop(UpdatedLeader, StartSystemPid, Visited);
-
         {update_nodes_in_cluster, NodesInCluster, NewLeaderID, NewColor} ->
             Node = Leader#leader.node,
             Neighbors = Node#node.neighbors,
@@ -516,18 +518,15 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             UpdatedLeader = Leader#leader{node = UpdatedNode},
 
             leader_loop(UpdatedLeader, StartSystemPid, Visited);
-
-
-
-                %% Unhandled messages
-                _Other ->
-                    io:format("Node (~p, ~p) received an unhandled message.~n", [
-                        Leader#leader.node#node.x, Leader#leader.node#node.y
-                    ]),
-                    leader_loop(
-                        Leader, StartSystemPid, Visited
-                    )
-            end.
+        %% Unhandled messages
+        _Other ->
+            io:format("Node (~p, ~p) received an unhandled message.~n", [
+                Leader#leader.node#node.x, Leader#leader.node#node.y
+            ]),
+            leader_loop(
+                Leader, StartSystemPid, Visited
+            )
+    end.
 
 %% Invio merge da leader con ID minore a leader con ID maggiore
 invio_merge_da_id_minore(Leader, LeaderPIDMaggiore) ->
