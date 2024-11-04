@@ -1,0 +1,5 @@
+{
+"leader_id": "<0.132.0>", "color": "orange", "server_id": "<0.112.0>", "adj_clusters": [], "nodes_in_cluster": [],
+"node": {
+"x": 4, "y": 5, "parent": "<0.112.0>", "children": [], "time": "10:08:47", "leader_id": "<0.132.0>", "pid": "<0.132.0>", "neighbors": []
+}}

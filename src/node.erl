@@ -64,6 +64,8 @@ leader_loop(Leader, StartSystemPid, Visited) ->
         Leader#leader.node#node.x, Leader#leader.node#node.y, self()
     ]),
 
+    save_data(Leader),
+
     receive
         {aggiorna_leader, NewLeader} ->
             leader_loop(NewLeader, StartSystemPid, Visited);
@@ -211,11 +213,13 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             InitialNeighbors = Leader#leader.node#node.neighbors,
             LeaderID = Leader#leader.node#node.leaderID,
 
+            merged = [NodePIDs || InitialNeighbors],
+
             io:format("Leader Node (~p, ~p) starting Phase 2.~n", [X, Y]),
 
-            %% Usa `gather_adjacent_clusters` per raccogliere informazioni evitando messaggi inutili
+            %% Usa `gather_adjacent_clusters` per raccogliere informazioni sui Neighbors del
             {AllAdjacentClusters, NeighborsList} = gather_adjacent_clusters(
-                InitialNeighbors, LeaderID, [], []
+                merged, LeaderID, [], []
             ),
 
             io:format("AllAdjacentClusters: ~p~nNeighborsList: ~p~n", [
@@ -259,7 +263,7 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             );
         {save_to_db, ServerPid} ->
             % Procedura per salvare le informazioni su DB locale
-            save_to_local_db(Leader),
+            save_data(Leader),
             ServerPid ! {ack_save_to_db, self()},
 
             % Crea una lista dei nodi nel cluster escludendo il PID del leader
@@ -285,11 +289,11 @@ leader_loop(Leader, StartSystemPid, Visited) ->
         {save_to_db_node} ->
             % Salva solo i dati del nodo in un file JSON locale
             Node = Leader#leader.node,
-            save_to_local_db_node(Node),
+            save_data(Node),
             node_loop(Node, StartSystemPid, Visited);
         %% Updates the leaderID
         {leader_update, NewLeader} ->
-            UpdatedNode = Leader#node{leaderID = NewLeader},
+            UpdatedLeader = Leader#node{leaderID = NewLeader},
             lists:foreach(
                 fun(child) ->
                     child ! {leader_update, NewLeader}
@@ -297,7 +301,7 @@ leader_loop(Leader, StartSystemPid, Visited) ->
                 Leader#node.children
             ),
             leader_loop(
-                UpdatedNode,
+                UpdatedLeader,
                 StartSystemPid,
                 Visited
             );
@@ -318,7 +322,7 @@ leader_loop(Leader, StartSystemPid, Visited) ->
 
             %% Aggiorna il colore del leader o del nodo
             UpdatedLeader = Leader#leader{color = Color},
-
+            
             %% Notifica ai vicini il cambio di colore
             notify_neighbors_of_color_change(UpdatedLeader, Color, StartSystemPid, Visited);
         {color_adj_update, FromPid, Color} ->
@@ -331,7 +335,6 @@ leader_loop(Leader, StartSystemPid, Visited) ->
                 Leader#leader.adjClusters, FromPid, Color
             ),
             UpdatedLeader = Leader#leader{adjClusters = UpdatedAdjClusters},
-
             %% Continua il ciclo con lo stato aggiornato
             leader_loop(UpdatedLeader, StartSystemPid, Visited);
         {cluster_data, _FromLeaderPid, FromLeaderData} ->
@@ -390,6 +393,8 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             UpdatedNode = Node#node{leaderID = new_leader},
 
             UpdatedLeader = Leader#leader{node = UpdatedNode},
+
+        
 
             leader_loop(UpdatedLeader, StartSystemPid, Visited);
         {update_nodes_in_cluster, NodesInCluster, NewLeaderID, NewColor} ->
@@ -468,6 +473,7 @@ notify_neighbors_of_color_change(Leader, Color, StartSystemPid, Visited) ->
         _ ->
             io:format("Vicini con lo stesso colore trovati. Avvio processo di merge sequenziale.~n"),
             % Avvia il merge sequenziale per ogni cluster con lo stesso colore
+            
             merge_adjacent_clusters(SameColorAdjClusters, Leader, StartSystemPid, Visited)
     end,
     
@@ -483,6 +489,13 @@ notify_neighbors_of_color_change(Leader, Color, StartSystemPid, Visited) ->
     % Comunica al server la nuova configurazione del leader
     UpdatedLeader#leader.serverID ! {change_color_complete, self(), UpdatedLeader},
 
+    X = Leader#leader.node#node.x,
+    Y = Leader#leader.node#node.y,
+    Timestamp = Leader#leader.node#node.time,
+
+    % scrivi log
+    log_operation(X, Y, Timestamp, io_lib:format("Cambio colore a ~p", [Color])),
+
     % Continua il ciclo principale del leader
     leader_loop(UpdatedLeader, StartSystemPid, Visited).
 
@@ -492,6 +505,11 @@ merge_adjacent_clusters([], Leader, _StartSystemPid, _Visited) ->
     Leader;
 merge_adjacent_clusters([{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, StartSystemPid, Visited) ->
     io:format("Inviando merge_request al leader adiacente con PID ~p.~n", [AdjLeaderID]),
+    % scrivi log
+    X = Leader#leader.node#node.x,
+    Y = Leader#leader.node#node.y,
+    Timestamp = Leader#leader.node#node.time,
+    log_operation(X, Y, Timestamp, io_lib:format("Inviando merge_request al leader adiacente con PID ~p", [AdjLeaderID])),
     AdjLeaderID ! {merge_request, self()},
     receive
         {response_to_merge, Nodes_in_Cluster, AdjListIDMaggiore} ->
@@ -571,6 +589,7 @@ node_loop(Node, _StartSystemPid, _Visited) ->
         Node#node.pid,
         Node#node.leaderID
     ]),
+    save_data(Node),
     receive
         {change_color, Color} ->
             Node#node.leaderID ! {change_color, Node#node.pid, Color, Node#node.time},
@@ -587,14 +606,30 @@ node_loop(Node, _StartSystemPid, _Visited) ->
             node_loop(Node, _StartSystemPid, _Visited)
     end.
 
-%% Funzione per salvare i dati di un nodo in un file JSON locale
-save_to_local_db_node(Node) ->
-    % Ottieni le coordinate X e Y per costruire il nome del file
+
+
+save_data(NodeOrLeader) ->
+    % Extract Node and Leader data accordingly
+    io:format("salvo i dati"),
+    case NodeOrLeader of
+        #node{} = Node ->
+            % Handle node data saving
+            save_node_data_to_file(Node);
+        _ ->
+            % Handle leader data saving
+            save_leader_data_to_file(NodeOrLeader)
+    end.
+
+
+
+save_node_data_to_file(Node) ->
+    % Get coordinates X and Y
     X = Node#node.x,
     Y = Node#node.y,
-    Filename = io_lib:format("DB/~p_~p_node.json", [X, Y]),
+    Dir = io_lib:format("DB/~p_~p/", [X, Y]),
+    Filename = lists:concat([Dir, "data.json"]),
 
-    % Crea la cartella DB se non esiste
+    % Ensure the directory exists
     filelib:ensure_dir(Filename),
 
     % Costruisci i dati JSON del nodo in formato stringa
@@ -612,26 +647,22 @@ save_to_local_db_node(Node) ->
         ]
     ),
 
-    % Salva i dati JSON in un file locale
+    % Save the JSON data to the file
     file:write_file(Filename, lists:flatten(JsonData)),
-    io:format("Dati del nodo salvati in: ~s~n", [Filename]).
+    io:format("Node data saved in: ~s~n", [Filename]).
 
-%% Funzione di supporto per formattare il tempo in una stringa "HH:MM:SS"
-format_time({Hour, Minute, Second}) ->
-    io_lib:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]);
-format_time(undefined) ->
-    "undefined".
 
 %% Funzione per salvare i dati di Leader in un file JSON locale
-save_to_local_db(Leader) ->
+save_leader_data_to_file(Leader) ->
     Node = Leader#leader.node,
 
     % Ottieni le coordinate X e Y per costruire il nome del file
     X = Node#node.x,
     Y = Node#node.y,
-    Filename = io_lib:format("DB/~p_~p.json", [X, Y]),
+    Dir = io_lib:format("DB/~p_~p/", [X, Y]),
+    Filename = lists:concat([Dir, "data.json"]),
 
-    % Crea la cartella DB se non esiste
+    % Crea la cartella DB/X_Y/ se non esiste
     filelib:ensure_dir(Filename),
 
     % Ottieni il tempo come stringa formattata "HH:MM:SS"
@@ -658,9 +689,18 @@ save_to_local_db(Leader) ->
         ]
     ),
 
-    % Salva i dati JSON in un file locale
+    % Salva i dati JSON in DB/X_Y/data.json
     file:write_file(Filename, lists:flatten(JsonData)),
     io:format("Dati di Leader (~p,~p) con PID ~p salvati in: ~s~n", [X, Y, self(), Filename]).
+
+
+%% Funzione di supporto per formattare il tempo in una stringa "HH:MM:SS"
+format_time({Hour, Minute, Second}) ->
+    io_lib:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]);
+format_time(undefined) ->
+    "undefined".
+
+
 
 %% Funzione helper per convertire la lista di cluster adiacenti in formato JSON-friendly
 convert_adj_clusters(AdjClusters) ->
@@ -679,7 +719,11 @@ convert_node_list(Nodes) ->
     "[" ++ string:join(JsonNodes, ",") ++ "]".
 
 %% Funzione per convertire un PID in stringa
-pid_to_string(Pid) -> erlang:pid_to_list(Pid).
+pid_to_string(Pid) when is_pid(Pid) -> 
+    erlang:pid_to_list(Pid);
+pid_to_string(undefined) -> 
+    "undefined".
+
 
 %% Funzione per convertire un atomo in una stringa JSON-friendly
 atom_to_string(Atom) when is_atom(Atom) -> atom_to_list(Atom);
@@ -758,6 +802,9 @@ node_loop_propagate(
     end,
     %% Continua il ciclo principale del nodo con lo stato aggiornato
     UpdatedLeader = Leader#leader{node = Node},
+
+
+
     leader_loop(
         UpdatedLeader, StartSystemPid, Visited
     ).
@@ -862,17 +909,7 @@ wait_for_ack_from_neighbors(
 gather_adjacent_clusters([], _LeaderID, AccumulatedClusters, NeighborsList) ->
     % Restituisce la lista finale dei neighbors e clusters senza duplicati
     {AccumulatedClusters, NeighborsList};
-gather_adjacent_clusters(
-    [{Pid, NeighborColor, NeighborLeaderID} | Rest], LeaderID, AccumulatedClusters, NeighborsList
-) ->
-    % Controlla se il vicino ha un LeaderID diverso e aggiungilo a clusters e neighbors
-    UpdatedClusters =
-        case NeighborLeaderID =/= LeaderID of
-            true -> [{Pid, NeighborColor, NeighborLeaderID} | AccumulatedClusters];
-            false -> AccumulatedClusters
-        end,
-    UpdatedNeighborsList = [{Pid, NeighborColor, NeighborLeaderID} | NeighborsList],
-    gather_adjacent_clusters(Rest, LeaderID, UpdatedClusters, UpdatedNeighborsList);
+
 gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters, NeighborsList) ->
     %% Se il vicino non è già nel formato {Pid, Color, LeaderID}, invia richiesta per ottenere le informazioni
     Pid ! {get_leader_info, self()},
@@ -892,3 +929,29 @@ gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters, NeighborsL
     after 5000 ->
         gather_adjacent_clusters(Rest, LeaderID, AccumulatedClusters, NeighborsList)
     end.
+
+
+%% Funzione per salvare l'operazione nel log con il timestamp passato come parametro
+log_operation(X, Y, Timestamp, Operation) ->
+    % Formatta il timestamp come stringa
+    TimestampStr = format_timestamp(Timestamp),
+
+    % Crea il percorso per il file di log DB/X_Y/log
+    Dir = io_lib:format("DB/~p_~p/", [X, Y]),
+    LogFile = lists:concat([Dir, "log"]),
+
+    % Assicurati che la directory esista
+    filelib:ensure_dir(LogFile),
+
+    % Scrivi l'operazione nel file di log
+    LogEntry = io_lib:format("~s - ~s~n", [TimestampStr, Operation]),
+    file:write_file(LogFile, lists:flatten(LogEntry), [append]),
+
+    io:format("Operazione loggata: ~s - ~s~n", [TimestampStr, Operation]).
+
+
+%% Funzione di supporto per formattare il timestamp in "HH:MM:SS"
+format_timestamp({Hour, Minute, Second}) ->
+    io_lib:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]);
+format_timestamp(undefined) ->
+    "undefined".
