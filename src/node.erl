@@ -205,6 +205,11 @@ leader_loop(Leader, StartSystemPid, Visited) ->
                         Visited
                     )
             end;
+
+        {get_list_neighbors, FromPid} ->
+            io:format("~p: Invio a ~p la lista dei miei vicini", [self(), FromPid]),
+            FromPid ! {response_get_list_neighbors, Leader#leader.node#node.neighbors};
+
         %% Fase 2 di avvio dal leader
         {start_phase2, NodePIDs} ->
             ServerPid = Leader#leader.serverID,
@@ -212,27 +217,39 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             Y = Leader#leader.node#node.y,
             InitialNeighbors = Leader#leader.node#node.neighbors,
             LeaderID = Leader#leader.node#node.leaderID,
-
-            merged = [NodePIDs || InitialNeighbors],
-
+            
             io:format("Leader Node (~p, ~p) starting Phase 2.~n", [X, Y]),
 
+            NodePIDsWithoutSelf = lists:delete(self(), NodePIDs),
+
+            io:format("InitialNeighbors: ~p~nNodePIDsWithoutSelf: ~p~n", [
+                InitialNeighbors, NodePIDsWithoutSelf
+            ]),           
+
+            AdjNodesToCluster = gather_adjacent_nodes(NodePIDsWithoutSelf, LeaderID, InitialNeighbors),
+            AdjNodesToCluster_no_duplicates = remove_duplicates(AdjNodesToCluster),
+
+
+             io:format("AdjNodesToCluster: ~p,~nAdjNodesToCluster_no_duplicates: ~p~n", [
+                AdjNodesToCluster, AdjNodesToCluster_no_duplicates
+            ]),
+
+
             %% Usa `gather_adjacent_clusters` per raccogliere informazioni sui Neighbors del
-            {AllAdjacentClusters, NeighborsList} = gather_adjacent_clusters(
-                merged, LeaderID, [], []
+            AllAdjacentClusters = gather_adjacent_clusters(
+                AdjNodesToCluster_no_duplicates, LeaderID, [], []
             ),
 
-            io:format("AllAdjacentClusters: ~p~nNeighborsList: ~p~n", [
-                AllAdjacentClusters, NeighborsList
+            io:format("AllAdjacentClusters: ~p~n", [
+                AllAdjacentClusters
             ]),
 
             %% Invia il messaggio ai nodi del cluster con le informazioni finali
             ServerPid ! {self(), phase2_complete, LeaderID, AllAdjacentClusters},
 
-            %% Aggiorna il leader con le informazioni raccolte e i nuovi neighbors
-            UpdatedNode = Leader#leader.node#node{neighbors = NeighborsList},
+            
             UpdatedLeader = Leader#leader{
-                node = UpdatedNode, nodes_in_cluster = NodePIDs, adjClusters = AllAdjacentClusters
+                nodes_in_cluster = NodePIDs, adjClusters = AllAdjacentClusters
             },
 
             leader_loop(
@@ -610,7 +627,7 @@ node_loop(Node, _StartSystemPid, _Visited) ->
 
 save_data(NodeOrLeader) ->
     % Extract Node and Leader data accordingly
-    io:format("salvo i dati"),
+    io:format("SALVO I DATI~n"),
     case NodeOrLeader of
         #node{} = Node ->
             % Handle node data saving
@@ -906,9 +923,9 @@ wait_for_ack_from_neighbors(
 %% Funzione per inviare il messaggio e raccogliere i leader ID distinti dai vicini
 %% evitando messaggi inutili se i dati sono già presenti in `neighbors`.
 %% Funzione aggiornata per raccogliere le informazioni sui neighbors
-gather_adjacent_clusters([], _LeaderID, AccumulatedClusters, NeighborsList) ->
+gather_adjacent_clusters([], _LeaderID, AccumulatedClusters, _NeighborsList) ->
     % Restituisce la lista finale dei neighbors e clusters senza duplicati
-    {AccumulatedClusters, NeighborsList};
+    AccumulatedClusters;
 
 gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters, NeighborsList) ->
     %% Se il vicino non è già nel formato {Pid, Color, LeaderID}, invia richiesta per ottenere le informazioni
@@ -929,6 +946,25 @@ gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters, NeighborsL
     after 5000 ->
         gather_adjacent_clusters(Rest, LeaderID, AccumulatedClusters, NeighborsList)
     end.
+
+
+gather_adjacent_nodes([], _LeaderID, AccumulatedAdjNodes) ->
+    % Se NodePIDsWithoutSelf è vuoto, restituisci AccumulatedAdjNodes senza fare nulla
+    AccumulatedAdjNodes;
+gather_adjacent_nodes([Pid | Rest], LeaderID, AccumulatedAdjNodes) ->
+    io:format("Recupero nodi adiacenti di ~p~n", [Pid]),
+    Pid ! {get_list_neighbors, self()},
+    receive
+        {response_get_list_neighbors, Neighbors} ->
+            io:format("~p mi ha inviato ~p~n", [Pid, Neighbors]),
+            UpdatedAccumulatedNodes = AccumulatedAdjNodes ++ Neighbors,
+            gather_adjacent_nodes(Rest, LeaderID, UpdatedAccumulatedNodes)
+    after 5000 ->
+        gather_adjacent_nodes(Rest, LeaderID, AccumulatedAdjNodes)
+    end.
+
+remove_duplicates(List) ->
+    lists:usort(List).
 
 
 %% Funzione per salvare l'operazione nel log con il timestamp passato come parametro

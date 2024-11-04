@@ -312,7 +312,7 @@ start_phase2_for_all_leaders(Nodes, ProcessedNodes ,LeadersData, ProcessedLeader
 
                     % Richiama `start_phase2_for_all_leaders` per continuare con il prossimo leader
                     start_phase2_for_all_leaders(Nodes, ProcessedNodes, UpdatedLeadersData, [LeaderPid | ProcessedLeaders])
-            after 5000 ->
+            after 50000 ->
                 % Timeout: nessuna risposta dal leader entro 5 secondi
                 io:format("Timeout waiting for Phase 2 completion from Leader PID: ~p~n", [
                     LeaderPid

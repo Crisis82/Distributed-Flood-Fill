@@ -1,5 +1,5 @@
 {
-"leader_id": "<0.126.0>", "color": "black", "server_id": "<0.112.0>", "adj_clusters": [], "nodes_in_cluster": [],
+"leader_id": "<0.126.0>", "color": "white", "server_id": "<0.112.0>", "adj_clusters": [], "nodes_in_cluster": [],
 "node": {
-"x": 3, "y": 4, "parent": "<0.112.0>", "children": [], "time": "10:08:47", "leader_id": "<0.126.0>", "pid": "<0.126.0>", "neighbors": []
+"x": 3, "y": 4, "parent": "<0.122.0>", "children": [], "time": "13:04:45", "leader_id": "<0.122.0>", "pid": "<0.126.0>", "neighbors": []
 }}
