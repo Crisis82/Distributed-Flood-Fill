@@ -132,7 +132,36 @@ server_loop(Nodes, ProcessedNodes, LeadersData) ->
             % Continua il ciclo del server con LeadersData aggiornato
             server_loop(Nodes, ProcessedNodes, UpdatedLeadersData);
 
+        {updated_AdjCLusters, LeaderPid, Leader} ->
+            io:format("SERVER: ho ricevuto la nuova configurazione di ~p: ~p~n~n", [Leader#leader.node#node.leaderID, Leader]),
 
+            Color = Leader#leader.color,
+            AdjC = Leader#leader.adjClusters,
+            NodesInCluster = Leader#leader.nodes_in_cluster,
+
+            ValidNodesInCluster = 
+                case is_list(NodesInCluster) of
+                    true -> NodesInCluster;
+                    false -> []
+                end,
+
+
+            % Inizializza LeaderInfo come mappa con i campi di base, se non esiste già
+            LeaderInfo = maps:get(LeaderPid, LeadersData, #{color => undefined, adjacent_clusters => [], nodes => []}),
+
+            % Aggiorna LeaderInfo con i nuovi dati
+            LeaderInfo1 = maps:put(color, Color, LeaderInfo),
+            LeaderInfo2 = maps:put(adjacent_clusters, AdjC, LeaderInfo1),
+            UpdatedLeaderInfo = maps:put(nodes, ValidNodesInCluster, LeaderInfo2),
+
+            % Aggiorna LeadersData con la nuova configurazione del leader
+            UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),
+
+            JsonData = save_leader_configuration_json(UpdatedLeadersData),
+            file:write_file("leaders_data.json", JsonData),
+
+            % Continua il ciclo con i dati aggiornati
+            server_loop(Nodes, ProcessedNodes, UpdatedLeadersData);
 
         _Other ->
             log_operation("Received unhandled message."),
@@ -261,6 +290,8 @@ start_phase2_for_all_leaders(Nodes, ProcessedNodes ,LeadersData, ProcessedLeader
     RemainingLeaders = maps:filter(
         fun(Key, _) -> not lists:member(Key, ProcessedLeaders) end, LeadersData
     ),
+
+    io:format("Leader rimanenti: ~p", [RemainingLeaders]),
     % Seleziona i PID dei leader non processati
     case maps:keys(RemainingLeaders) of
         % Se non ci sono leader rimanenti, Fase 2 completata
