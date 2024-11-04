@@ -8,6 +8,7 @@
 ]).
 -include("node.hrl").
 -include("event.hrl").
+
 %% new_node/8
 %% Creates a basic node with the given parameters, including its PID and neighbors.
 new_node(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors) ->
@@ -30,7 +31,12 @@ new_leader(X, Y, Color, ServerPid, StartSystemPid) ->
 
     % Step 2: Create the leader record with the initial node
     Leader = #leader{
-        node = Node, color = Color, serverID = ServerPid, adjClusters = [], nodes_in_cluster = []
+        node = Node,
+        color = Color,
+        serverID = ServerPid,
+        last_event = event:new(),
+        adjClusters = [],
+        nodes_in_cluster = []
     },
 
     % Step 3: Start the node process and update leaderID and pid fields
@@ -633,10 +639,10 @@ node_loop(Node, _StartSystemPid, _Visited) ->
             node_loop(Node, _StartSystemPid, _Visited);
         {get_leader_info, FromPid} ->
             io:format(
-                "~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader: 
-\n"
-                "                essendo un nodo normale e non sapendo il colore 
-\n"
+                "~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader: \n"
+                "\n"
+                "                essendo un nodo normale e non sapendo il colore \n"
+                "\n"
                 "                inoltro la richiesta al mio leader.~n",
                 [
                     self(), FromPid
