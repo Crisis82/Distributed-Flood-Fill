@@ -348,19 +348,37 @@ leader_loop(Leader, StartSystemPid, Visited) ->
                 StartSystemPid,
                 Visited
             );
-        {change_color, PID, Color, _Time} ->
-            io:format(
-                "Node (~p, ~p) ha ricevuto una richiesta di cambio colore da ~p e cambia il colore a ~p.~n",
-                [
-                    Leader#leader.node#node.x, Leader#leader.node#node.y, PID, Color
-                ]
+        {change_color, PID, Color, Event} ->
+            GreaterEvent = event:greater(Leader#leader.last_event, Event),
+            AdjClusterWithSameColor = lists:member(
+                {_Pid, Color, _NeighborID}, Leader#leader.adjClusters
             ),
-
-            %% Aggiorna il colore del leader o del nodo
-            UpdatedLeader = Leader#leader{color = Color},
-
-            %% Notifica ai vicini il cambio di colore
-            notify_neighbors_of_color_change(UpdatedLeader, Color, StartSystemPid, Visited);
+            if
+                % Default case (newer timestamp)
+                GreaterEvent ->
+                    changeColor(Leader, Color, Event, PID, StartSystemPid, Visited);
+                % Consistency (case 1): recover
+                not GreaterEvent andalso AdjClusterWithSameColor ->
+                    OldColor = Leader#leader.color,
+                    % Perform recolor with previous color and then merge
+                    changeColor(Leader, Color, Event, PID, StartSystemPid, Visited),
+                    % Update color with old color
+                    changeColor(Leader, OldColor, Event, PID, StartSystemPid, Visited);
+                % Consistency (case 2): drop
+                not GreaterEvent andalso not AdjClusterWithSameColor ->
+                    io:format(
+                        "Richiesta di cambio colore da ~p rifiutata: timestamp troppo vecchio.~n",
+                        PID
+                    );
+                % Consistency (case 3): managed by central server
+                %
+                % Other cases
+                true ->
+                    io:format(
+                        "Situazione non prevista: evento ~p, colore ~p, pid richiedente ~p",
+                        [Event, Color, PID]
+                    )
+            end;
         {color_adj_update, FromPid, Color, Nodes_in_Cluster} ->
             io:format("Nodo (~p, ~p) ha ricevuto color_adj_update da ~p con nuovo colore ~p.~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid, Color
@@ -459,6 +477,19 @@ leader_loop(Leader, StartSystemPid, Visited) ->
             )
     end.
 
+changeColor(Leader, Color, Event, PID, StartSystemPid, Visited) ->
+    io:format(
+        "Node (~p, ~p) ha ricevuto una richiesta di cambio colore da ~p e cambia il colore a ~p.~n",
+        [
+            Leader#leader.node#node.x, Leader#leader.node#node.y, PID, Color
+        ]
+    ),
+
+    %% Aggiorna il colore e l'ultima operazione sul cluster
+    UpdatedLeader = Leader#leader{color = Color, last_event = Event},
+    %% Notifica ai vicini il cambio di colore
+    notify_neighbors_of_color_change(UpdatedLeader, Color, StartSystemPid, Visited).
+
 notify_neighbors_of_color_change(Leader, Color, StartSystemPid, Visited) ->
     ColorAtom =
         if
@@ -466,9 +497,11 @@ notify_neighbors_of_color_change(Leader, Color, StartSystemPid, Visited) ->
             true -> list_to_atom(Color)
         end,
     SameColorAdjClusters = unique_leader_clusters(
-        [{NeighborPid, NeighborColor, LeaderID}
+        [
+            {NeighborPid, NeighborColor, LeaderID}
          || {NeighborPid, NeighborColor, LeaderID} <- Leader#leader.adjClusters,
-            NeighborColor == ColorAtom]
+            NeighborColor == ColorAtom
+        ]
     ),
 
     io:format("Gli adjacents clusters sono ~p, quelli con il colore ~p sono: ~p.~n", [
@@ -514,7 +547,6 @@ notify_neighbors_of_color_change(Leader, Color, StartSystemPid, Visited) ->
 
     % Continua il ciclo principale del leader
     leader_loop(UpdatedLeader, StartSystemPid, Visited).
-
 
 % Funzione per rimuovere duplicati in base al LeaderID
 unique_leader_clusters(Clusters) ->
