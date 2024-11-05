@@ -5,6 +5,7 @@ c(server).
 c(start_system).
 c(time_server).
 c(tcp_server).
+c(event).
 start_system:start(3,3).
 
 --------------------------------------------

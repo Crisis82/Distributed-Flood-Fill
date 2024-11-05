@@ -465,11 +465,11 @@ notify_neighbors_of_color_change(Leader, Color, StartSystemPid, Visited) ->
             is_atom(Color) -> Color;
             true -> list_to_atom(Color)
         end,
-    SameColorAdjClusters = [
-        {NeighborPid, NeighborColor, LeaderID}
-     || {NeighborPid, NeighborColor, LeaderID} <- Leader#leader.adjClusters,
-        NeighborColor == ColorAtom
-    ],
+    SameColorAdjClusters = unique_leader_clusters(
+        [{NeighborPid, NeighborColor, LeaderID}
+         || {NeighborPid, NeighborColor, LeaderID} <- Leader#leader.adjClusters,
+            NeighborColor == ColorAtom]
+    ),
 
     io:format("Gli adjacents clusters sono ~p, quelli con il colore ~p sono: ~p.~n", [
         Leader#leader.adjClusters, ColorAtom, SameColorAdjClusters
@@ -514,6 +514,15 @@ notify_neighbors_of_color_change(Leader, Color, StartSystemPid, Visited) ->
 
     % Continua il ciclo principale del leader
     leader_loop(UpdatedLeader, StartSystemPid, Visited).
+
+
+% Funzione per rimuovere duplicati in base al LeaderID
+unique_leader_clusters(Clusters) ->
+    % Usa una mappa per tenere solo un cluster per LeaderID
+    ClusterMap = maps:from_list(
+        lists:map(fun({Pid, Color, LeaderID}) -> {LeaderID, {Pid, Color, LeaderID}} end, Clusters)
+    ),
+    maps:values(ClusterMap).
 
 merge_adjacent_clusters([], Leader, _StartSystemPid, _Visited) ->
     % Nessun altro cluster da gestire, restituisce il leader aggiornato

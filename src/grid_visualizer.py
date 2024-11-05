@@ -12,6 +12,42 @@ from matplotlib.colors import rgb_to_hsv
 import socket
 import numpy as np
 
+import nbformat
+from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
+import time
+from IPython.display import Image
+
+# Path del notebook
+notebook_path = "history_log.ipynb"
+
+# Funzione per loggare il cambiamento nel notebook
+def log_change_notebook(pid, color, image_path):
+    # Crea una stringa con timestamp, comando e il percorso dell’immagine
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    markdown_text = f"### Cambiamento: {timestamp}\n- **PID**: {pid}\n- **Color**: {color}\n- **Image Path**: `{image_path}`"
+
+    # Carica o crea il notebook
+    try:
+        notebook = nbformat.read(notebook_path, as_version=4)
+    except FileNotFoundError:
+        notebook = new_notebook()
+
+    # Aggiungi una cella di importazione solo se non è già presente
+    if not any("from IPython.display import display, Image" in cell.source for cell in notebook.cells):
+        import_cell = new_code_cell("from IPython.display import display, Image")
+        notebook.cells.insert(0, import_cell)
+
+    # Aggiungi una cella Markdown per descrivere il cambiamento
+    notebook.cells.append(new_markdown_cell(markdown_text))
+
+    # Aggiungi una cella di codice per visualizzare l'immagine
+    code_text = f"display(Image(filename='{image_path}'))"
+    notebook.cells.append(new_code_cell(code_text))
+
+    # Salva il notebook aggiornato
+    nbformat.write(notebook, notebook_path)
+    print(f"Cambiamento registrato nel notebook: {notebook_path}")
+
 def custom_rgb_to_hsv(rgb):
     r, g, b = rgb
     max_c = max(r, g, b)
@@ -98,7 +134,7 @@ import sys
 # Controlla se il programma è avviato in modalità debug
 DEBUG_MODE = "--debug" in sys.argv
 
-def draw_matrix():
+def draw_matrix(output_path=IMG_PATH):
     # Carica i dati dei leader e dei nodi
     leaders_data = load_leaders_data()
     nodes_data = load_nodes_data()
@@ -155,9 +191,9 @@ def draw_matrix():
     ax.set_ylim(0, max_x)
     
     # Salva l'immagine della matrice
-    fig.savefig(IMG_PATH, bbox_inches='tight', pad_inches=0)
+    fig.savefig(output_path, bbox_inches='tight', pad_inches=0)
     fig.clear()
-
+    return fig
 
 # Funzione per trovare il leader di un nodo basato sul suo pid
 # Input:
@@ -466,10 +502,19 @@ def change_color():
 
     # Invia la richiesta di cambio colore al server Erlang tramite TCP
     if send_color_change_request(pid, color):
-        # Notifica i client WebSocket di un aggiornamento per ricaricare l'immagine della matrice
+        # Definisci un percorso unico per l'immagine
+        image_path = f"static/matrix_{time.strftime('%Y%m%d_%H%M%S')}.png"
+        
+        # Disegna la matrice e salva l'immagine con il nuovo percorso
+        fig = draw_matrix(image_path)
+
+        # Logga il cambiamento nel notebook
+        log_change_notebook(pid, color, image_path)
+
+        # Notifica i client WebSocket e aggiorna la visualizzazione
         socketio.emit('refresh')
-        # Reindirizza alla homepage per ricaricare la vista aggiornata
         return redirect(url_for('home'))
+
     else:
         # Restituisce un messaggio di errore HTTP 500 in caso di problemi
         return "Errore nel cambio colore", 500
