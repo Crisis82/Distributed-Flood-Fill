@@ -12,7 +12,7 @@
 start(N, M) ->
     %% Avvio del server
     io:format("Sono start_system e avvio server.~n"),
-    ServerPid = server:start_server(),
+    ServerPid = server:start_server(self()),
     io:format("Sono start_system e ho concluso l'avvio del server.~n"),
 
     %% Creazione dei nodi nella griglia NxM
@@ -111,14 +111,19 @@ start(N, M) ->
     ),
 
     % Invia i nodi al server per completare il setup
-    io:format("Invio messaggio {start_setup, ~p} a ~p.~n", [UpdatedNodes, ServerPid]),
-    ServerPid ! {start_setup, UpdatedNodes},
+    io:format("Invio messaggio {start_setup, ~p, ~p} a ~p.~n", [UpdatedNodes,self(), ServerPid]),
+    ServerPid ! {start_setup, UpdatedNodes, self()},
 
     % Avvia il server TCP per la visualizzazione
-    % io:format("Avvio il tcp_server per visualizzare i nodi.~n").
-    tcp_server:start().
+    receive 
+        {finih_setup, _LeaderIDs} ->
+            io:format("Avvio il tcp_server per visualizzare i nodi.~n"),
+            tcp_server:start()
+            % io:format("FINITO, ora inizio a fare cose belle.~n"),
+            % simulation:start(LeaderIDs, "failure")
+    end.
 
-    % io:format("FINITO").
+
 
 %% Funzione che salva i dati dei nodi in un file JSON con tutti i campi
 %% Input:
