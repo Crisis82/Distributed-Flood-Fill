@@ -67,7 +67,6 @@ create_node(Leader, StartSystemPid) ->
     io:format("Node (~p, ~p) created with color: ~p, PID: ~p~n", [
         UpdatedNode#node.x, UpdatedNode#node.y, Leader#leader.color, Pid
     ]),
-    Pid ! {aggiorna_leader, UpdatedLeader},
     UpdatedLeader.
 
 %% Leader loop to receive messages and update state.
@@ -79,6 +78,12 @@ leader_loop(Leader) ->
     utils:save_data(Leader),
 
     receive
+        {get_leader_info, FromPid} ->
+            io:format("~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader.~n", [
+                self(), FromPid
+            ]),
+            FromPid ! {leader_info, Leader#leader.node#node.leaderID, Leader#leader.color},
+            leader_loop(Leader);
         {new_leader_elected, NewLeaderPid} ->
             % Update the leader's node to use the new leader PID
             UpdatedNode = Leader#leader.node#node{leaderID = NewLeaderPid},
@@ -149,15 +154,29 @@ leader_loop(Leader) ->
             leader_loop(Leader);
         %% Request to change color from a node or himself
         {change_color_request, _Pid, Event} ->
+
             GreaterEvent = event:greater(Leader#leader.last_event, Event),
+            
+            io:format(
+                "~p : Gestione della richiesta 'change_color_request'.~n" ++
+                "Ultimo evento: ~p~n" ++
+                "Nuovo evento: ~p~n" ++
+                "Risultato confronto - LAST > NEW_EVENT: ~p, NEW_EVENT > LAST: ~p~n",
+                [self(), Leader#leader.last_event, Event, GreaterEvent, not GreaterEvent]
+            ),
+
+
+            
             IsColorShared = utils:check_same_color(Event#event.color, Leader#leader.adjClusters),
 
             if
                 % Default case (newer timestamp)
                 GreaterEvent ->
+                    io:format("E' un nuovo evento: PROCEDO NORMALMENTE ~n"),
                     Leader#leader.serverID ! {operation_request, Event};
                 % Consistency (case 1): recover
                 not GreaterEvent andalso IsColorShared ->
+                    io:format("E' un vecchio evento che richiedeva di eseguire un merge: RECOVER ~n"),
                     OldColor = Leader#leader.color,
                     % Recover recolor operation and then merge
                     Leader#leader.serverID ! {operation_request, Event},
@@ -165,6 +184,7 @@ leader_loop(Leader) ->
                     Leader#leader.serverID ! {operation_request, Event#event{color = OldColor}};
                 % Consistency (case 2): drop
                 not GreaterEvent andalso not IsColorShared ->
+                    io:format("E' un vecchio evento che NON richiedeva di eseguire un merge: DROP ~n"),
                     io:format("Richiesta di cambio colore rifiutata: timestamp troppo vecchio.~n");
                 % Consistency (case 3): managed by central server
 
@@ -285,7 +305,8 @@ node_loop(Node) ->
     receive
         {change_color_request, Color} ->
             Node#node.leaderID !
-                {event:new(color, utils:normalize_color(Color), Node#node.leaderID)},
+                {change_color_request, self(),
+                    event:new(color, utils:normalize_color(Color), Node#node.leaderID)},
             node_loop(Node);
         {leader_update, NewLeader} ->
             % propagate update to children

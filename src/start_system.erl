@@ -68,7 +68,7 @@ start(N, M) ->
                 ]
             ),
             Pid ! {neighbors, Neighbors},
-
+ 
             %% Restituisce il Leader aggiornato
             UpdatedLeader
         end,
@@ -79,10 +79,6 @@ start(N, M) ->
 
     %% Attendi gli ACK da tutti i nodi per confermare la configurazione
     ack_loop(UpdatedNodes, length(UpdatedNodes)),
-
-    %% Sincronizzazione dei nodi con il time_server
-    io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
-    time_server:start(UpdatedNodes),
 
     %% Dopo aver ricevuto tutti gli ACK, invia il setup al server
     io:format("Tutti gli ACK ricevuti, avvio il setup dei nodi con il server.~n"),
@@ -119,6 +115,9 @@ start(N, M) ->
         {finih_setup, _LeaderIDs} ->
             io:format("Avvio il tcp_server per visualizzare i nodi.~n"),
             tcp_server:start()
+            %% Sincronizzazione dei nodi con il time_server
+            %  io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
+            % time_server:start(UpdatedNodes)
         % io:format("FINITO, ora inizio a fare cose belle.~n"),
         % simulation:start(LeaderIDs, "failure")
     end.

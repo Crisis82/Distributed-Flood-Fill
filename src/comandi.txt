@@ -9,6 +9,7 @@ c(setup).
 c(server).
 c(tcp_server).
 c(start_system).
+c(utils).
 start_system:start(7,7).
 
 --------------------------------------------

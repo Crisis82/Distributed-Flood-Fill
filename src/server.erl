@@ -194,7 +194,7 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
             Event#event.from ! {server_ok, Event},
             server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid);
         _Other ->
-            io:format("Received unhandled message ~p.", [_Other]),
+            io:format("!!!!!!!!!!!! -> SERVER Received unhandled message ~p.", [_Other]),
             server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid)
         % In your server_loop after detecting dead leaders
         % 10000 milliseconds

@@ -8,6 +8,8 @@ setup_loop(Leader, StartSystemPid, Visited) ->
         Leader#leader.node#node.x, Leader#leader.node#node.y, self()
     ]),
 
+    Pid = self(),
+
     utils:save_data(Leader),
     receive
         {neighbors, Neighbors} ->
@@ -15,16 +17,17 @@ setup_loop(Leader, StartSystemPid, Visited) ->
                 Leader#leader.node#node.x, Leader#leader.node#node.y, Neighbors
             ]),
             % Update node state with neighbors and notify system
-            UpdatedNode = Leader#leader.node#node{neighbors = Neighbors},
+            UpdatedNode = Leader#leader.node#node{neighbors = Neighbors, leaderID = Pid, pid = Pid},
             UpdatedLeader = Leader#leader{node = UpdatedNode},
 
             io:format(
-                "Sono il nodo (~p, ~p) con PID ~p e invio a il messaggio {ack_neighbors, ~p} a ~p~n",
+                "SETUP ~p : Sono il nodo (~p, ~p) con PID ~p e invio a il messaggio {ack_neighbors, ~p} a ~p~n",
                 [
+                    self(),
                     Leader#leader.node#node.x,
                     Leader#leader.node#node.y,
-                    self(),
-                    self(),
+                    Pid,
+                    Pid,
                     StartSystemPid
                 ]
             ),
@@ -78,8 +81,8 @@ setup_loop(Leader, StartSystemPid, Visited) ->
             if
                 %% Unvisited node with the same color, continue propagation
                 Visited =:= false andalso Leader#leader.color =:= SenderColor ->
-                    io:format("Node (~p, ~p) has the same color as the requesting node.~n", [
-                        Leader#leader.node#node.x, Leader#leader.node#node.y
+                    io:format("Node (~p, ~p) has the same color as the requesting node (~p).~n", [
+                        Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid
                     ]),
 
                     % Update leaderID and pid in the node
@@ -103,8 +106,8 @@ setup_loop(Leader, StartSystemPid, Visited) ->
                 %% Node already visited, responds with 'node_already_visited'
                 Visited =:= true ->
                     io:format(
-                        "Node (~p, ~p) has already been visited, responding accordingly.~n", [
-                            Leader#leader.node#node.x, Leader#leader.node#node.y
+                        "Node (~p, ~p) has already been visited, responding accordingly to ~p.~n", [
+                            Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid
                         ]
                     ),
                     FromPid ! {self(), node_already_visited},
@@ -116,8 +119,8 @@ setup_loop(Leader, StartSystemPid, Visited) ->
                     );
                 %% Node with different color, only acknowledges receipt
                 true ->
-                    io:format("Node (~p, ~p) has a different color (~p), sends only received.~n", [
-                        Leader#leader.node#node.x, Leader#leader.node#node.y, Leader#leader.color
+                    io:format("Node (~p, ~p) has a different color (~p), sends only received to ~p.~n", [
+                        Leader#leader.node#node.x, Leader#leader.node#node.y, Leader#leader.color, FromPid
                     ]),
                     FromPid ! {self(), ack_propagation_different_color},
                     setup_loop(
@@ -363,8 +366,8 @@ wait_for_ack_from_neighbors(
                     );
                 %% Timeout in caso di mancata risposta dai vicini
                 _Other ->
-                    io:format("Timeout while waiting for ACKs from neighbors: ~p~n", [
-                        NeighborsToWaitFor
+                    io:format("Timeout while waiting for ACKs from neighbors: ~p, ~p~n", [
+                        NeighborsToWaitFor, _Other
                     ]),
                     {ok, AccumulatedPIDs}
             end

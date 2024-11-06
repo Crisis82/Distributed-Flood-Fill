@@ -15,9 +15,9 @@ new(Type, Color, LeaderID) ->
 greater(T1, T2) ->
     if
         T1#event.timestamp > T2#event.timestamp ->
-            true;
+            false;
         T1#event.timestamp =:= T2#event.timestamp ->
             T1#event.id > T2#event.id;
         true ->
-            false
+            true
     end.

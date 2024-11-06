@@ -27,7 +27,7 @@ loop(Socket) ->
                     io:format("~n~n~nHo ricevuto l'ID: ~p e colore: ~p~n", [IdStr, ColorStr]),
                     case {convert_to_pid(IdStr), convert_to_color(ColorStr)} of
                         {{ok, Pid}, {ok, Color}} ->
-                            Pid ! {change_color, Color},
+                            Pid ! {change_color_request, Color},
                             gen_tcp:send(Socket, "ok");
                         {{error, _}, _} ->
                             io:format("Errore: formato PID non valido ~p~n", [IdStr]),
