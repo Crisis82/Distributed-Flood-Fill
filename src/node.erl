@@ -154,19 +154,16 @@ leader_loop(Leader) ->
             leader_loop(Leader);
         %% Request to change color from a node or himself
         {change_color_request, _Pid, Event} ->
+            GreaterEvent = event:greater(Event, Leader#leader.last_event),
 
-            GreaterEvent = event:greater(Leader#leader.last_event, Event),
-            
             io:format(
                 "~p : Gestione della richiesta 'change_color_request'.~n" ++
-                "Ultimo evento: ~p~n" ++
-                "Nuovo evento: ~p~n" ++
-                "Risultato confronto - LAST > NEW_EVENT: ~p, NEW_EVENT > LAST: ~p~n",
+                    "Ultimo evento: ~p~n" ++
+                    "Nuovo evento: ~p~n" ++
+                    "Risultato confronto - NEW_EVENT > LAST: ~p, LAST > NEW_EVENT: ~p~n",
                 [self(), Leader#leader.last_event, Event, GreaterEvent, not GreaterEvent]
             ),
 
-
-            
             IsColorShared = utils:check_same_color(Event#event.color, Leader#leader.adjClusters),
 
             if
@@ -176,7 +173,9 @@ leader_loop(Leader) ->
                     Leader#leader.serverID ! {operation_request, Event};
                 % Consistency (case 1): recover
                 not GreaterEvent andalso IsColorShared ->
-                    io:format("E' un vecchio evento che richiedeva di eseguire un merge: RECOVER ~n"),
+                    io:format(
+                        "E' un vecchio evento che richiedeva di eseguire un merge: RECOVER ~n"
+                    ),
                     OldColor = Leader#leader.color,
                     % Recover recolor operation and then merge
                     Leader#leader.serverID ! {operation_request, Event},
@@ -184,7 +183,9 @@ leader_loop(Leader) ->
                     Leader#leader.serverID ! {operation_request, Event#event{color = OldColor}};
                 % Consistency (case 2): drop
                 not GreaterEvent andalso not IsColorShared ->
-                    io:format("E' un vecchio evento che NON richiedeva di eseguire un merge: DROP ~n"),
+                    io:format(
+                        "E' un vecchio evento che NON richiedeva di eseguire un merge: DROP ~n"
+                    ),
                     io:format("Richiesta di cambio colore rifiutata: timestamp troppo vecchio.~n");
                 % Consistency (case 3): managed by central server
 
