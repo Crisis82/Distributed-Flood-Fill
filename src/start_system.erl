@@ -111,19 +111,17 @@ start(N, M) ->
     ),
 
     % Invia i nodi al server per completare il setup
-    io:format("Invio messaggio {start_setup, ~p, ~p} a ~p.~n", [UpdatedNodes,self(), ServerPid]),
+    io:format("Invio messaggio {start_setup, ~p, ~p} a ~p.~n", [UpdatedNodes, self(), ServerPid]),
     ServerPid ! {start_setup, UpdatedNodes, self()},
 
     % Avvia il server TCP per la visualizzazione
-    receive 
+    receive
         {finih_setup, _LeaderIDs} ->
             io:format("Avvio il tcp_server per visualizzare i nodi.~n"),
             tcp_server:start()
-            % io:format("FINITO, ora inizio a fare cose belle.~n"),
-            % simulation:start(LeaderIDs, "failure")
+        % io:format("FINITO, ora inizio a fare cose belle.~n"),
+        % simulation:start(LeaderIDs, "failure")
     end.
-
-
 
 %% Funzione che salva i dati dei nodi in un file JSON con tutti i campi
 %% Input:
@@ -223,7 +221,7 @@ find_neighbors(X, Y, Nodes, N, M) ->
         {X + DX, Y + DY}
      || DX <- [-1, 0, 1],
         DY <- [-1, 0, 1],
-        not (DX == 0 andalso DY == 0),
+        not (DX =:= 0 andalso DY =:= 0),
         X + DX >= 1,
         X + DX =< N,
         Y + DY >= 1,
