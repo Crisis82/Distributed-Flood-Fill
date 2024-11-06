@@ -12,6 +12,7 @@ start_server(StartSystemPid) ->
     log_operation("Server started."),
     %% Avvia il server e passa a server_loop con uno stato vuoto
     ServerPid = spawn(fun() -> server_loop([], [], #{}, StartSystemPid) end),
+    register(server, ServerPid),
     io:format("Server started with PID: ~p~n", [ServerPid]),
     ServerPid.
 
@@ -104,19 +105,19 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
             ]),
 
             Color = Leader#leader.color,
-            AdjC = Leader#leader.adjClusters,
-            NodesInCluster = Leader#leader.nodes_in_cluster,
+            AdjC = Leader#leader.adj_clusters,
+            ClusterNodes = Leader#leader.cluster_nodes,
 
-            ValidNodesInCluster =
-                case is_list(NodesInCluster) of
-                    true -> NodesInCluster;
+            ValidClusterNodes =
+                case is_list(ClusterNodes) of
+                    true -> ClusterNodes;
                     false -> []
                 end,
 
             io:format(
                 "Leader PID ~p ha come nuovo colore ~p, come nuovi AdjCluster ~p e come nodi nel cluster ~p~n",
                 [
-                    LeaderPid, Color, AdjC, ValidNodesInCluster
+                    LeaderPid, Color, AdjC, ValidClusterNodes
                 ]
             ),
 
@@ -131,7 +132,7 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
             % Aggiorna LeaderInfo con i nuovi dati
             LeaderInfo1 = maps:put(color, Color, LeaderInfo),
             LeaderInfo2 = maps:put(adjacent_clusters, AdjC, LeaderInfo1),
-            UpdatedLeaderInfo = maps:put(nodes, ValidNodesInCluster, LeaderInfo2),
+            UpdatedLeaderInfo = maps:put(nodes, ValidClusterNodes, LeaderInfo2),
 
             % Aggiorna LeadersData con la nuova configurazione del leader
             UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),
@@ -162,12 +163,12 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
             ]),
 
             Color = Leader#leader.color,
-            AdjC = Leader#leader.adjClusters,
-            NodesInCluster = Leader#leader.nodes_in_cluster,
+            AdjC = Leader#leader.adj_clusters,
+            ClusterNodes = Leader#leader.cluster_nodes,
 
-            ValidNodesInCluster =
-                case is_list(NodesInCluster) of
-                    true -> NodesInCluster;
+            ValidClusterNodes =
+                case is_list(ClusterNodes) of
+                    true -> ClusterNodes;
                     false -> []
                 end,
 
@@ -179,7 +180,7 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
             % Aggiorna LeaderInfo con i nuovi dati
             LeaderInfo1 = maps:put(color, Color, LeaderInfo),
             LeaderInfo2 = maps:put(adjacent_clusters, AdjC, LeaderInfo1),
-            UpdatedLeaderInfo = maps:put(nodes, ValidNodesInCluster, LeaderInfo2),
+            UpdatedLeaderInfo = maps:put(nodes, ValidClusterNodes, LeaderInfo2),
 
             % Aggiorna LeadersData con la nuova configurazione del leader
             UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),
@@ -211,17 +212,17 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
                 log_operation(io_lib:format("Detected that leader ~p is not alive.", [DeadPid])),
                 % Handle the dead leader according to cluster size
                 ClusterInfo = maps:get(DeadPid, AccLeadersData),
-                NodesInCluster = maps:get(nodes, ClusterInfo, []),
+                ClusterNodes = maps:get(nodes, ClusterInfo, []),
                 Color = maps:get(color, ClusterInfo),
                 AdjacentClusters = maps:get(adjacent_clusters, ClusterInfo, []),
-                NodesWithoutDeadLeader = lists:delete(DeadPid, NodesInCluster),
+                NodesWithoutDeadLeader = lists:delete(DeadPid, ClusterNodes),
                 case NodesWithoutDeadLeader of
                     [] ->
                         % Case 1: Single-node cluster
                         % Log the information of the dead leader
                         io:format(
                             "Leader morto: ~p, Colore: ~p, Nodi: ~p, Clusters adiacenti: ~p~n", [
-                                DeadPid, Color, NodesInCluster, AdjacentClusters
+                                DeadPid, Color, ClusterNodes, AdjacentClusters
                             ]
                         ),
 
@@ -238,7 +239,7 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
                         % Log the old and new leader information
                         io:format(
                             "Leader morto: ~p, Colore: ~p, Nodi: ~p, Clusters adiacenti: ~p~n", [
-                                DeadPid, Color, NodesInCluster, AdjacentClusters
+                                DeadPid, Color, ClusterNodes, AdjacentClusters
                             ]
                         ),
                         io:format(
@@ -464,18 +465,18 @@ start_phase2_for_all_leaders(Nodes, ProcessedNodes, LeadersData, ProcessedLeader
         [LeaderPid | _] ->
             % Ottiene le informazioni del leader corrente dal dizionario LeadersData
             LeaderInfo = maps:get(LeaderPid, LeadersData),
-            NodesInCluster = maps:get(nodes, LeaderInfo),
+            ClusterNodes = maps:get(nodes, LeaderInfo),
 
             % Log di avvio della Fase 2 per il leader corrente
             io:format("~n ------------------------------------- ~n"),
             io:format("~n Server starting Phase 2 for Leader PID: ~p~n", [LeaderPid]),
             io:format("~n ------------------------------------- ~n"),
             io:format("Server sending start_phase2 to Leader PID: ~p with nodes: ~p~n", [
-                LeaderPid, NodesInCluster
+                LeaderPid, ClusterNodes
             ]),
 
             % Invia il messaggio di avvio della Fase 2 al leader corrente
-            LeaderPid ! {start_phase2, NodesInCluster},
+            LeaderPid ! {start_phase2, ClusterNodes},
 
             % Attende la risposta dal leader
             receive

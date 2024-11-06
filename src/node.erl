@@ -1,33 +1,27 @@
 -module(node).
 
 -export([
-    new_node/8,
     new_leader/5,
-    create_node/2,
-    leader_loop/1,
-    node_loop/1
+    leader_loop/1
 ]).
 
 -include("node.hrl").
 -include("event.hrl").
 
 %% Creates a basic node with the given parameters, including its PID and neighbors.
-new_node(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors) ->
+new_node(Pid, X, Y, LeaderID, Neighbors) ->
     #node{
+        pid = Pid,
         x = X,
         y = Y,
-        parent = Parent,
-        children = Children,
-        time = Time,
         leaderID = LeaderID,
-        pid = Pid,
         neighbors = Neighbors
     }.
 
 %% Creates a leader node, assigns its own PID as the leaderID, and initializes neighbors.
 new_leader(X, Y, Color, ServerPid, StartSystemPid) ->
     % Step 1: Create a base node with an initial PID and empty neighbors
-    Node = new_node(X, Y, ServerPid, [], undefined, undefined, undefined, []),
+    Node = new_node(undefined, X, Y, ServerPid, []),
 
     % Step 2: Create the leader record with the initial node
     Leader = #leader{
@@ -35,8 +29,8 @@ new_leader(X, Y, Color, ServerPid, StartSystemPid) ->
         color = Color,
         serverID = ServerPid,
         last_event = event:new(undefined, undefined, undefined),
-        adjClusters = [],
-        nodes_in_cluster = []
+        adj_clusters = [],
+        cluster_nodes = []
     },
 
     % Step 3: Start the node process and update leaderID and pid fields
@@ -51,14 +45,7 @@ create_node(Leader, StartSystemPid) ->
     end),
 
     %% Register the pid to the alias node_X_Y
-    register(
-        list_to_atom(
-            lists:flatten(
-                io_lib:format("node~p_~p", [Leader#leader.node#node.x, Leader#leader.node#node.y])
-            )
-        ),
-        Pid
-    ),
+    utils:reference(Pid, Leader#leader.node),
 
     % Update leaderID and pid in the node
     UpdatedNode = Leader#leader.node#node{leaderID = Pid, pid = Pid},
@@ -92,16 +79,16 @@ leader_loop(Leader) ->
         {remove_adjacent_cluster, DeadLeaderPid} ->
             % Remove the dead cluster from the adjacency list
             NewAdjClusters = operation:remove_cluster_from_adjacent(
-                DeadLeaderPid, Leader#leader.adjClusters
+                DeadLeaderPid, Leader#leader.adj_clusters
             ),
-            UpdatedLeader = Leader#leader{adjClusters = NewAdjClusters},
+            UpdatedLeader = Leader#leader{adj_clusters = NewAdjClusters},
             leader_loop(UpdatedLeader);
         {update_adjacent_cluster, NewLeaderPid, UpdatedClusterInfo} ->
             % Update the adjacency list with the new leader info
             NewAdjClusters = operation:update_adjacent_cluster_info(
-                NewLeaderPid, UpdatedClusterInfo, Leader#leader.adjClusters
+                NewLeaderPid, UpdatedClusterInfo, Leader#leader.adj_clusters
             ),
-            UpdatedLeader = Leader#leader{adjClusters = NewAdjClusters},
+            UpdatedLeader = Leader#leader{adj_clusters = NewAdjClusters},
             leader_loop(UpdatedLeader);
         {aggiorna_leader, NewLeader} ->
             leader_loop(NewLeader);
@@ -113,7 +100,7 @@ leader_loop(Leader) ->
             % Crea una lista dei nodi nel cluster escludendo il PID del leader
             FilteredNodes = lists:filter(
                 fun(NodePid) -> NodePid =/= Leader#leader.node#node.pid end,
-                Leader#leader.nodes_in_cluster
+                Leader#leader.cluster_nodes
             ),
 
             % Trasforma ttutti i nodi del cluster (tranne leader in nodi normali)
@@ -133,17 +120,15 @@ leader_loop(Leader) ->
             node_loop(Node);
         %% Updates the leaderID
         {leader_update, NewLeader} ->
-            Node = Leader#leader.node,
-
-            % propagate update to children
+            % propagate update to other cluster nodes
             lists:foreach(
                 fun(child) ->
                     child ! {leader_update, NewLeader}
                 end,
-                Node#node.children
+                Leader#leader.cluster_nodes
             ),
 
-            UpdatedNode = Node#node{leaderID = NewLeader},
+            UpdatedNode = Leader#leader.node#node{leaderID = NewLeader},
             UpdatedLeader = Leader#leader{node = UpdatedNode},
             leader_loop(UpdatedLeader);
         %% Leader receives direcly a color change request
@@ -164,7 +149,7 @@ leader_loop(Leader) ->
                 [self(), Leader#leader.last_event, Event, GreaterEvent, not GreaterEvent]
             ),
 
-            IsColorShared = utils:check_same_color(Event#event.color, Leader#leader.adjClusters),
+            IsColorShared = utils:check_same_color(Event#event.color, Leader#leader.adj_clusters),
 
             if
                 % Default case (newer timestamp)
@@ -201,17 +186,17 @@ leader_loop(Leader) ->
                 merge -> UpdatedLeader = operation:merge(Leader, Event)
             end,
             leader_loop(UpdatedLeader);
-        %% Updates the color to Color of the triple with FromPid as NeighborID in adjClusters
-        {color_adj_update, FromPid, Color, Nodes_in_Cluster} ->
+        %% Updates the color to Color of the triple with FromPid as NeighborID in adj_clusters
+        {color_adj_update, FromPid, Color, cluster_nodes} ->
             io:format("Nodo (~p, ~p) ha ricevuto color_adj_update da ~p con nuovo colore ~p.~n", [
                 Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid, Color
             ]),
 
             UpdatedAdjClusters = operation:update_adj_cluster_color(
-                Leader#leader.adjClusters, Nodes_in_Cluster, Color, FromPid
+                Leader#leader.adj_clusters, cluster_nodes, Color, FromPid
             ),
 
-            UpdatedLeader = Leader#leader{adjClusters = UpdatedAdjClusters},
+            UpdatedLeader = Leader#leader{adj_clusters = UpdatedAdjClusters},
             UpdatedLeader#leader.serverID ! {updated_AdjCLusters, self(), UpdatedLeader},
             %% Continua il ciclo con lo stato aggiornato
             leader_loop(UpdatedLeader);
@@ -232,15 +217,15 @@ leader_loop(Leader) ->
                     ]),
                     NodePid ! {leader_update, LeaderID}
                 end,
-                Leader#leader.nodes_in_cluster
+                Leader#leader.cluster_nodes
             ),
 
-            % Send current nodes_in_cluster and adjClusters to the new leader
+            % Send current cluster_nodes and adj_clusters to the new leader
             LeaderID !
-                {response_to_merge, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters},
+                {response_to_merge, Leader#leader.cluster_nodes, Leader#leader.adj_clusters},
 
             io:format("Sending response_to_merge to ~p con ~p e ~p.~n", [
-                LeaderID, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
+                LeaderID, Leader#leader.cluster_nodes, Leader#leader.adj_clusters
             ]),
 
             % Update the leaderID of the current node
@@ -256,18 +241,18 @@ leader_loop(Leader) ->
             %        ]),
             %        pid ! {remove_myself_from_leaders, LeaderIDMinore}
             %    end,
-            %    Leader#leader.adjClusters
+            %    Leader#leader.adj_clusters
             % ),
 
             % Transform into a regular node and start the node loop
             node_loop(UpdatedNode);
-        {update_nodes_in_cluster, NodesInCluster, NewLeaderID, NewColor} ->
+        {update_cluster_nodes, ClusterNodes, NewLeaderID, NewColor} ->
             Node = Leader#leader.node,
             Neighbors = Node#node.neighbors,
 
             UpdatedNeighbors = lists:map(
                 fun({NeighborPid, _NeighborColor, _NeighborLeaderID} = Neighbor) ->
-                    case lists:member(NeighborPid, NodesInCluster) of
+                    case lists:member(NeighborPid, ClusterNodes) of
                         true ->
                             io:format("Updating neighbor ~p with new leader ~p and color ~p.~n", [
                                 NeighborPid, NewLeaderID, NewColor
@@ -309,15 +294,8 @@ node_loop(Node) ->
                 {change_color_request, self(),
                     event:new(color, utils:normalize_color(Color), Node#node.leaderID)},
             node_loop(Node);
+        % Update the node's leader ID
         {leader_update, NewLeader} ->
-            % propagate update to children
-            lists:foreach(
-                fun(child) ->
-                    child ! {leader_update, NewLeader}
-                end,
-                Node#node.children
-            ),
-            % Update the node's leader ID
             UpdatedNode = Node#node{leaderID = NewLeader},
             node_loop(UpdatedNode);
         % TODO: useless. merge is done only if the leader finds a cluster
@@ -341,7 +319,7 @@ node_loop(Node) ->
             ),
             Node#node.leaderID ! {get_leader_info, FromPid},
             node_loop(Node);
-        {new_leader_elected, ServerID, Color, NodesInCluster, AdjacentClusters} ->
+        {new_leader_elected, ServerID, Color, ClusterNodes, AdjacentClusters} ->
             io:format("Node ~p is now the new leader of the cluster with color ~p.~n", [
                 self(), Color
             ]),
@@ -353,7 +331,7 @@ node_loop(Node) ->
                 Color,
                 % Manteniamo lo stesso server ID
                 ServerID,
-                NodesInCluster,
+                ClusterNodes,
                 AdjacentClusters
             ),
 

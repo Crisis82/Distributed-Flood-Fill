@@ -119,9 +119,14 @@ setup_loop(Leader, StartSystemPid, Visited) ->
                     );
                 %% Node with different color, only acknowledges receipt
                 true ->
-                    io:format("Node (~p, ~p) has a different color (~p), sends only received to ~p.~n", [
-                        Leader#leader.node#node.x, Leader#leader.node#node.y, Leader#leader.color, FromPid
-                    ]),
+                    io:format(
+                        "Node (~p, ~p) has a different color (~p), sends only received to ~p.~n", [
+                            Leader#leader.node#node.x,
+                            Leader#leader.node#node.y,
+                            Leader#leader.color,
+                            FromPid
+                        ]
+                    ),
                     FromPid ! {self(), ack_propagation_different_color},
                     setup_loop(
                         %% Different color, thus the node can be a leader of another cluster
@@ -190,7 +195,7 @@ setup_loop(Leader, StartSystemPid, Visited) ->
             % Crea una lista dei nodi nel cluster escludendo il PID del leader
             FilteredNodes = lists:filter(
                 fun(NodePid) -> NodePid =/= Leader#leader.node#node.pid end,
-                Leader#leader.nodes_in_cluster
+                Leader#leader.cluster_nodes
             ),
 
             % Invia richiesta di salvataggio a tutti i nodi in FilteredNodes
@@ -202,7 +207,7 @@ setup_loop(Leader, StartSystemPid, Visited) ->
             ),
 
             UpdatedLeader = Leader#leader{
-                nodes_in_cluster = NodePIDs, adjClusters = AllAdjacentClusters
+                adj_clusters = AllAdjacentClusters, cluster_nodes = NodePIDs
             },
 
             node:leader_loop(UpdatedLeader)

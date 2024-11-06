@@ -27,17 +27,23 @@ start(N, M) ->
     %% Stampa delle informazioni dei nodi creati
     io:format("I seguenti nodi sono stati creati:.~n"),
     lists:foreach(
-        fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
+        fun(
+            #leader{
+                node = Node,
+                color = Color,
+                serverID = ServerID,
+                adj_clusters = AdjClusters,
+                cluster_nodes = ClusterNodes
+            }
+        ) ->
             io:format("Node Information:~n"),
-            io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
-            io:format("  Parent: ~p~n", [Node#node.parent]),
-            io:format("  Children: ~p~n", [Node#node.children]),
-            io:format("  Time: ~p~n", [Node#node.time]),
-            io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
             io:format("  PID: ~p~n", [Node#node.pid]),
+            io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
+            io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
             io:format("  Color: ~p~n", [Color]),
             io:format("  Server ID: ~p~n", [ServerID]),
-            io:format("  Adjacent Clusters: ~p~n~n", [AdjClusters])
+            io:format("  Adjacent Clusters: ~p~n", [AdjClusters]),
+            io:format("  Cluster Nodes: ~p~n~n", [ClusterNodes])
         end,
         Nodes
     ),
@@ -47,9 +53,9 @@ start(N, M) ->
     %% Itera attraverso ciascun nodo nella lista `Nodes`, assegna i vicini e aggiorna il campo neighbors
     UpdatedNodes = lists:map(
         fun(#leader{node = Node} = Leader) ->
+            Pid = Node#node.pid,
             X = Node#node.x,
             Y = Node#node.y,
-            Pid = Node#node.pid,
 
             %% Trova i vicini basandosi direttamente sulla lista `Nodes`
             Neighbors = find_neighbors(X, Y, Nodes, N, M),
@@ -68,7 +74,7 @@ start(N, M) ->
                 ]
             ),
             Pid ! {neighbors, Neighbors},
- 
+
             %% Restituisce il Leader aggiornato
             UpdatedLeader
         end,
@@ -91,17 +97,22 @@ start(N, M) ->
     %% Stampa delle informazioni dei nodi creati
     io:format("I seguenti nodi sono stati creati:.~n"),
     lists:foreach(
-        fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
+        fun(
+            #leader{
+                node = Node,
+                color = Color,
+                adj_clusters = AdjClusters,
+                cluster_nodes = ClusterNodes
+            }
+        ) ->
             io:format("Node Information:~n"),
+            io:format("  PID: ~p~n", [utils:get_reference(Node#node.pid)]),
             io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
-            io:format("  Parent: ~p~n", [Node#node.parent]),
-            io:format("  Children: ~p~n", [Node#node.children]),
-            io:format("  Time: ~p~n", [Node#node.time]),
-            io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
-            io:format("  PID: ~p~n", [Node#node.pid]),
+            io:format("  Leader ID: ~p~n", [utils:get_reference(Node#node.leaderID)]),
             io:format("  Color: ~p~n", [Color]),
-            io:format("  Server ID: ~p~n", [ServerID]),
-            io:format("  Adjacent Clusters: ~p~n~n", [AdjClusters])
+            io:format("  Server ID: ~p~n", [server]),
+            io:format("  Adjacent Clusters: ~p~n", [AdjClusters]),
+            io:format("  Cluster Nodes: ~p~n~n", [ClusterNodes])
         end,
         UpdatedNodes
     ),
@@ -115,9 +126,9 @@ start(N, M) ->
         {finih_setup, _LeaderIDs} ->
             io:format("Avvio il tcp_server per visualizzare i nodi.~n"),
             tcp_server:start()
-            %% Sincronizzazione dei nodi con il time_server
-            %  io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
-            % time_server:start(UpdatedNodes)
+        %% Sincronizzazione dei nodi con il time_server
+        %  io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
+        % time_server:start(UpdatedNodes)
         % io:format("FINITO, ora inizio a fare cose belle.~n"),
         % simulation:start(LeaderIDs, "failure")
     end.
@@ -130,19 +141,25 @@ start(N, M) ->
 save_nodes_data(Nodes) ->
     % Converte ciascun nodo in stringa JSON con tutti i campi
     JsonNodes = lists:map(
-        fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
+        fun(
+            #leader{
+                node = Node,
+                color = Color,
+                serverID = ServerID,
+                adj_clusters = AdjClusters,
+                cluster_nodes = ClusterNodes
+            }
+        ) ->
             node_to_json(
+                utils:get_reference(Node#node.pid),
                 Node#node.x,
                 Node#node.y,
-                Node#node.parent,
-                Node#node.children,
-                Node#node.time,
-                Node#node.leaderID,
-                Node#node.pid,
+                utils:get_reference(Node#node.leaderID),
                 Node#node.neighbors,
                 Color,
-                ServerID,
-                AdjClusters
+                utils:get_reference(ServerID),
+                AdjClusters,
+                ClusterNodes
             )
         end,
         Nodes
@@ -157,33 +174,26 @@ save_nodes_data(Nodes) ->
 %% - Parametri dei campi del nodo
 %% Output:
 %% - Restituisce una stringa JSON che rappresenta il nodo completo
-node_to_json(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors, Color, ServerID, AdjClusters) ->
+node_to_json(Pid, X, Y, LeaderID, Neighbors, Color, ServerID, AdjClusters, ClusterNodes) ->
     XStr = integer_to_list(X),
     YStr = integer_to_list(Y),
-    ParentStr = pid_to_string(Parent),
-    ChildrenStr = lists:map(fun pid_to_string/1, Children),
-    TimeStr = io_lib:format("~p", [Time]),
-    LeaderIDStr = pid_to_string(LeaderID),
-    PidStr = pid_to_string(Pid),
     NeighborsStr = lists:map(fun pid_to_string/1, Neighbors),
     ColorStr = atom_to_list(Color),
-    ServerIDStr = pid_to_string(ServerID),
     AdjClustersStr = lists:map(fun pid_to_string/1, AdjClusters),
+    ClusterNodesStr = lists:map(fun pid_to_string/1, ClusterNodes),
 
     io_lib:format(
-        "{\"x\": ~s, \"y\": ~s, \"parent\": \"~s\", \"children\": ~s, \"time\": \"~s\", \"leaderID\": \"~s\", \"pid\": \"~s\", \"neighbors\": ~s, \"color\": \"~s\", \"serverID\": \"~s\", \"adjClusters\": ~s}",
+        "{\"pid\": \"~s\", \"x\": ~s, \"y\": ~s, \"leaderID\": \"~s\", \"neighbors\": ~s, \"color\": \"~s\", \"serverID\": \"~s\", \"adj_clusters\": ~s, \"cluster_nodes\": ~s}",
         [
+            Pid,
             XStr,
             YStr,
-            ParentStr,
-            io_lib:format("~p", [ChildrenStr]),
-            TimeStr,
-            LeaderIDStr,
-            PidStr,
+            LeaderID,
             io_lib:format("~p", [NeighborsStr]),
             ColorStr,
-            ServerIDStr,
-            io_lib:format("~p", [AdjClustersStr])
+            ServerID,
+            io_lib:format("~p", [AdjClustersStr]),
+            io_lib:format("~p", [ClusterNodesStr])
         ]
     ).
 
