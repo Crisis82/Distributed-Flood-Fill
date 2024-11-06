@@ -1,17 +1,10 @@
-%% server.erl
 -module(server).
 -export([
-    start_server/1,
-    server_loop/4,
-    log_operation/1,
-    start_phase2_for_all_leaders/5,
-    save_leader_configuration_json/1
+    start_server/1
 ]).
 -include("node.hrl").
+-include("event.hrl").
 
-%% Avvia il processo del server e registra l'inizio nel log
-%% Output:
-%% - Restituisce il PID del server appena creato
 %% Avvia il processo del server e registra l'inizio nel log
 %% Output:
 %% - Restituisce il PID del server appena creato
@@ -21,7 +14,6 @@ start_server(StartSystemPid) ->
     ServerPid = spawn(fun() -> server_loop([], [], #{}, StartSystemPid) end),
     io:format("Server started with PID: ~p~n", [ServerPid]),
     ServerPid.
-
 
 %% Ciclo principale del server che gestisce i messaggi e mantiene lo stato
 %% Input:
@@ -38,24 +30,29 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
                 [] ->
                     log_operation("No nodes to process"),
                     server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid);
-                
                 % Processa il primo nodo e passa al resto
                 [#leader{node = Node} = Leader | Rest] ->
                     % Monitora il processo leader e aggiungi il monitor_ref a LeadersData
                     MonitorRef = erlang:monitor(process, Node#node.pid),
-                    log_operation(io_lib:format("Monitoring leader ~p with MonitorRef ~p", [Node#node.pid, MonitorRef])),
-                    
+                    log_operation(
+                        io_lib:format("Monitoring leader ~p with MonitorRef ~p", [
+                            Node#node.pid, MonitorRef
+                        ])
+                    ),
+
                     % Aggiungi il leader e il suo monitor_ref a LeadersData
-                    UpdatedLeadersData = maps:put(Node#node.pid, #{leader => Leader, monitor_ref => MonitorRef}, LeadersData),
+                    UpdatedLeadersData = maps:put(
+                        Node#node.pid, #{leader => Leader, monitor_ref => MonitorRef}, LeadersData
+                    ),
 
                     % Inizia la configurazione del leader
                     Node#node.pid ! {setup_server_request, self()},
 
                     % Continua il loop del server con il leader monitorato e il LeadersData aggiornato
-                    server_loop(Rest, ProcessedNodes ++ [Leader], UpdatedLeadersData, StartSystemPid)
+                    server_loop(
+                        Rest, ProcessedNodes ++ [Leader], UpdatedLeadersData, StartSystemPid
+                    )
             end;
-
-        
         %% Gestione del messaggio {FromNode, node_setup_complete, CombinedPIDs, Color}
         %% ricevuto dai nodi al completamento del setup
         {FromNode, node_setup_complete, CombinedPIDs, Color} ->
@@ -72,7 +69,9 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
                     log_operation("Setup completed for all nodes."),
                     io:format("Setup Phase 1 completed.~n~n LeadersData: ~p~n", [LeadersData1]),
                     % Avvia la Fase 2 per tutti i leader
-                    start_phase2_for_all_leaders(Nodes, ProcessedNodes, LeadersData1, [], StartSystemPid);
+                    start_phase2_for_all_leaders(
+                        Nodes, ProcessedNodes, LeadersData1, [], StartSystemPid
+                    );
                 % Passa al prossimo nodo da configurare
                 [#leader{node = Node} = Leader | RestNodes] ->
                     Node#node.pid ! {setup_server_request, self()},
@@ -89,7 +88,9 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
                 [] ->
                     log_operation("Setup completed for all nodes."),
                     io:format("Setup Phase 1 completed. LeadersData: ~p~n", [LeadersData]),
-                    start_phase2_for_all_leaders(Nodes, ProcessedNodes, LeadersData, [], StartSystemPid);
+                    start_phase2_for_all_leaders(
+                        Nodes, ProcessedNodes, LeadersData, [], StartSystemPid
+                    );
                 % Passa al prossimo nodo da configurare
                 [#leader{node = Node} = Leader | RestNodes] ->
                     Node#node.pid ! {setup_server_request, self()},
@@ -98,33 +99,39 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
         %% Gestione dei messaggi non previsti
 
         {change_color_complete, LeaderPid, Leader} ->
-            io:format("SERVER: ho ricevuto la nuova configurazione di ~p: ~p~n~n", [Leader#leader.node#node.leaderID, Leader]),
+            io:format("SERVER: ho ricevuto la nuova configurazione di ~p: ~p~n~n", [
+                Leader#leader.node#node.leaderID, Leader
+            ]),
 
             Color = Leader#leader.color,
             AdjC = Leader#leader.adjClusters,
             NodesInCluster = Leader#leader.nodes_in_cluster,
 
-            ValidNodesInCluster = 
+            ValidNodesInCluster =
                 case is_list(NodesInCluster) of
                     true -> NodesInCluster;
                     false -> []
                 end,
 
-            io:format("Leader PID ~p ha come nuovo colore ~p, come nuovi AdjCluster ~p e come nodi nel cluster ~p~n", [
-                LeaderPid, Color, AdjC, ValidNodesInCluster
-            ]),
+            io:format(
+                "Leader PID ~p ha come nuovo colore ~p, come nuovi AdjCluster ~p e come nodi nel cluster ~p~n",
+                [
+                    LeaderPid, Color, AdjC, ValidNodesInCluster
+                ]
+            ),
 
             % Log dell'operazione di cambio colore completata
             io:format("Leader PID ~p ha completato il cambio colore in ~p~n", [LeaderPid, Color]),
 
             % Inizializza LeaderInfo come mappa con i campi di base, se non esiste già
-            LeaderInfo = maps:get(LeaderPid, LeadersData, #{color => undefined, adjacent_clusters => [], nodes => []}),
+            LeaderInfo = maps:get(LeaderPid, LeadersData, #{
+                color => undefined, adjacent_clusters => [], nodes => []
+            }),
 
             % Aggiorna LeaderInfo con i nuovi dati
             LeaderInfo1 = maps:put(color, Color, LeaderInfo),
             LeaderInfo2 = maps:put(adjacent_clusters, AdjC, LeaderInfo1),
             UpdatedLeaderInfo = maps:put(nodes, ValidNodesInCluster, LeaderInfo2),
-
 
             % Aggiorna LeadersData con la nuova configurazione del leader
             UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),
@@ -136,35 +143,38 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
 
             % Continua il ciclo con i dati aggiornati
             server_loop(Nodes, ProcessedNodes, UpdatedLeadersData, StartSystemPid);
-
         {remove_myself_from_leaders, LeaderPid} ->
             % Rimuove LeaderPid da LeadersData
             UpdatedLeadersData = maps:remove(LeaderPid, LeadersData),
-            
+
             JsonData = save_leader_configuration_json(UpdatedLeadersData),
             file:write_file("leaders_data.json", JsonData),
 
-            io:format("SERVER: Rimosso Leader PID ~p da LeadersData. Nuova configurazione: ~p~n", [LeaderPid, UpdatedLeadersData]),
+            io:format("SERVER: Rimosso Leader PID ~p da LeadersData. Nuova configurazione: ~p~n", [
+                LeaderPid, UpdatedLeadersData
+            ]),
 
             % Continua il ciclo del server con LeadersData aggiornato
             server_loop(Nodes, ProcessedNodes, UpdatedLeadersData, StartSystemPid);
-
         {updated_AdjCLusters, LeaderPid, Leader} ->
-            io:format("SERVER: ho ricevuto la nuova configurazione di ~p: ~p~n~n", [Leader#leader.node#node.leaderID, Leader]),
+            io:format("SERVER: ho ricevuto la nuova configurazione di ~p: ~p~n~n", [
+                Leader#leader.node#node.leaderID, Leader
+            ]),
 
             Color = Leader#leader.color,
             AdjC = Leader#leader.adjClusters,
             NodesInCluster = Leader#leader.nodes_in_cluster,
 
-            ValidNodesInCluster = 
+            ValidNodesInCluster =
                 case is_list(NodesInCluster) of
                     true -> NodesInCluster;
                     false -> []
                 end,
 
-
             % Inizializza LeaderInfo come mappa con i campi di base, se non esiste già
-            LeaderInfo = maps:get(LeaderPid, LeadersData, #{color => undefined, adjacent_clusters => [], nodes => []}),
+            LeaderInfo = maps:get(LeaderPid, LeadersData, #{
+                color => undefined, adjacent_clusters => [], nodes => []
+            }),
 
             % Aggiorna LeaderInfo con i nuovi dati
             LeaderInfo1 = maps:put(color, Color, LeaderInfo),
@@ -179,86 +189,106 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
 
             % Continua il ciclo con i dati aggiornati
             server_loop(Nodes, ProcessedNodes, UpdatedLeadersData, StartSystemPid);
-
+        {operation_request, Event} ->
+            % TODO: for now just responds ok. To implement a operation queue
+            Event#event.from ! {server_ok, Event},
+            server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid);
         _Other ->
             io:format("Received unhandled message ~p.", [_Other]),
             server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid)
         % In your server_loop after detecting dead leaders
-        after 10000 ->  % 10000 milliseconds
-            % Get all monitored PIDs
-            LeaderPids = maps:keys(LeadersData),
-            io:format("SERVER: Verifico se i Leader sono ancora vivi: ~p~n", [LeaderPids]),
+        % 10000 milliseconds
+    after 10000 ->
+        % Get all monitored PIDs
+        LeaderPids = maps:keys(LeadersData),
+        io:format("SERVER: Verifico se i Leader sono ancora vivi: ~p~n", [LeaderPids]),
 
-            % Check which ones are not alive
-            DeadLeaders = [Pid || Pid <- LeaderPids, not erlang:is_process_alive(Pid)],
-            % Handle dead leaders
-            UpdatedLeadersData = lists:foldl(
-                fun(DeadPid, AccLeadersData) ->
-                    log_operation(io_lib:format("Detected that leader ~p is not alive.", [DeadPid])),
-                    % Handle the dead leader according to cluster size
-                    ClusterInfo = maps:get(DeadPid, AccLeadersData),
-                    NodesInCluster = maps:get(nodes, ClusterInfo, []),
-                    Color = maps:get(color, ClusterInfo),
-                    AdjacentClusters = maps:get(adjacent_clusters, ClusterInfo, []),
-                    NodesWithoutDeadLeader = lists:delete(DeadPid, NodesInCluster),
-                    case NodesWithoutDeadLeader of
-                        [] ->
-                            % Case 1: Single-node cluster
-                            % Log the information of the dead leader
-                            io:format("Leader morto: ~p, Colore: ~p, Nodi: ~p, Clusters adiacenti: ~p~n", [DeadPid, Color, NodesInCluster, AdjacentClusters]),
-                            
-                            % Remove the dead leader from LeadersData
-                            NewLeadersData = maps:remove(DeadPid, AccLeadersData),
-                            % Notify adjacent clusters to remove this cluster
-                            notify_adjacent_clusters_to_remove_cluster(AdjacentClusters, DeadPid),
-                            NewLeadersData;
-                        _ ->
-                            % Case 2: Multi-node cluster
-                            % Elect a new leader
-                            NewLeaderPid = hd(NodesWithoutDeadLeader),
-                            
-                            % Log the old and new leader information
-                            io:format("Leader morto: ~p, Colore: ~p, Nodi: ~p, Clusters adiacenti: ~p~n", [DeadPid, Color, NodesInCluster, AdjacentClusters]),
-                            io:format("Nuovo leader eletto: ~p, Colore: ~p, Nodi: ~p, Clusters adiacenti: ~p~n", [NewLeaderPid, Color, NodesWithoutDeadLeader, AdjacentClusters]),
+        % Check which ones are not alive
+        DeadLeaders = [Pid || Pid <- LeaderPids, not erlang:is_process_alive(Pid)],
+        % Handle dead leaders
+        UpdatedLeadersData = lists:foldl(
+            fun(DeadPid, AccLeadersData) ->
+                log_operation(io_lib:format("Detected that leader ~p is not alive.", [DeadPid])),
+                % Handle the dead leader according to cluster size
+                ClusterInfo = maps:get(DeadPid, AccLeadersData),
+                NodesInCluster = maps:get(nodes, ClusterInfo, []),
+                Color = maps:get(color, ClusterInfo),
+                AdjacentClusters = maps:get(adjacent_clusters, ClusterInfo, []),
+                NodesWithoutDeadLeader = lists:delete(DeadPid, NodesInCluster),
+                case NodesWithoutDeadLeader of
+                    [] ->
+                        % Case 1: Single-node cluster
+                        % Log the information of the dead leader
+                        io:format(
+                            "Leader morto: ~p, Colore: ~p, Nodi: ~p, Clusters adiacenti: ~p~n", [
+                                DeadPid, Color, NodesInCluster, AdjacentClusters
+                            ]
+                        ),
 
-                            io:format("SERVER: Invio a ~p {new_leader_elected, ~p, ~p, ~p, ~p}~n", [
-                                NewLeaderPid, self(), Color, NodesWithoutDeadLeader, AdjacentClusters
-                            ]),
+                        % Remove the dead leader from LeadersData
+                        NewLeadersData = maps:remove(DeadPid, AccLeadersData),
+                        % Notify adjacent clusters to remove this cluster
+                        notify_adjacent_clusters_to_remove_cluster(AdjacentClusters, DeadPid),
+                        NewLeadersData;
+                    _ ->
+                        % Case 2: Multi-node cluster
+                        % Elect a new leader
+                        NewLeaderPid = hd(NodesWithoutDeadLeader),
 
+                        % Log the old and new leader information
+                        io:format(
+                            "Leader morto: ~p, Colore: ~p, Nodi: ~p, Clusters adiacenti: ~p~n", [
+                                DeadPid, Color, NodesInCluster, AdjacentClusters
+                            ]
+                        ),
+                        io:format(
+                            "Nuovo leader eletto: ~p, Colore: ~p, Nodi: ~p, Clusters adiacenti: ~p~n",
+                            [NewLeaderPid, Color, NodesWithoutDeadLeader, AdjacentClusters]
+                        ),
 
-                            % Notify the new leader of its role
-                            NewLeaderPid ! {new_leader_elected, self(), Color, NodesWithoutDeadLeader, AdjacentClusters},
+                        io:format("SERVER: Invio a ~p {new_leader_elected, ~p, ~p, ~p, ~p}~n", [
+                            NewLeaderPid, self(), Color, NodesWithoutDeadLeader, AdjacentClusters
+                        ]),
 
-                            % Update the cluster info with the new leader
-                            UpdatedClusterInfo = ClusterInfo#{
-                                leader_pid => NewLeaderPid,
-                                nodes => NodesWithoutDeadLeader
-                            },
-                            % Update LeadersData
-                            NewLeadersData1 = maps:remove(DeadPid, AccLeadersData),
-                            NewLeadersData = maps:put(NewLeaderPid, UpdatedClusterInfo, NewLeadersData1),
+                        % Notify the new leader of its role
+                        NewLeaderPid !
+                            {new_leader_elected, self(), Color, NodesWithoutDeadLeader,
+                                AdjacentClusters},
 
-                            
-                            % Notify adjacent clusters about the new leader
-                            notify_adjacent_clusters_about_new_leader(AdjacentClusters, NewLeaderPid, UpdatedClusterInfo),
-                            % Update nodes in the cluster about the new leader
-                            update_cluster_nodes_about_new_leader(NodesWithoutDeadLeader, NewLeaderPid),
-                            
-                            NewLeadersData
-                    end
-                end,
-                LeadersData,
-                DeadLeaders
-            ),
-            % Salva la nuova configurazione in JSON dopo aver aggiornato la struttura dei leader
-            JsonData = save_leader_configuration_json(UpdatedLeadersData),
-            file:write_file("leaders_data.json", JsonData),
-            io:format("Configurazione aggiornata salvata in leaders_data.json dopo la rilevazione del leader morto~n"),
+                        % Update the cluster info with the new leader
+                        UpdatedClusterInfo = ClusterInfo#{
+                            leader_pid => NewLeaderPid,
+                            nodes => NodesWithoutDeadLeader
+                        },
+                        % Update LeadersData
+                        NewLeadersData1 = maps:remove(DeadPid, AccLeadersData),
+                        NewLeadersData = maps:put(
+                            NewLeaderPid, UpdatedClusterInfo, NewLeadersData1
+                        ),
 
-            % Continue the server loop with updated LeadersData
-            server_loop(Nodes, ProcessedNodes, UpdatedLeadersData, StartSystemPid)
+                        % Notify adjacent clusters about the new leader
+                        notify_adjacent_clusters_about_new_leader(
+                            AdjacentClusters, NewLeaderPid, UpdatedClusterInfo
+                        ),
+                        % Update nodes in the cluster about the new leader
+                        update_cluster_nodes_about_new_leader(NodesWithoutDeadLeader, NewLeaderPid),
+
+                        NewLeadersData
+                end
+            end,
+            LeadersData,
+            DeadLeaders
+        ),
+        % Salva la nuova configurazione in JSON dopo aver aggiornato la struttura dei leader
+        JsonData = save_leader_configuration_json(UpdatedLeadersData),
+        file:write_file("leaders_data.json", JsonData),
+        io:format(
+            "Configurazione aggiornata salvata in leaders_data.json dopo la rilevazione del leader morto~n"
+        ),
+
+        % Continue the server loop with updated LeadersData
+        server_loop(Nodes, ProcessedNodes, UpdatedLeadersData, StartSystemPid)
     end.
-
 
 notify_adjacent_clusters_to_remove_cluster(AdjacentClusters, DeadLeaderPid) ->
     % Estrae i LeaderID dai cluster adiacenti e rimuove i duplicati
@@ -288,7 +318,6 @@ update_cluster_nodes_about_new_leader(Nodes, NewLeaderPid) ->
         end,
         NodesWithoutLeader
     ).
-
 
 finish_setup(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
     io:format("SETUP COMPLETATO PER TUTTI I NODI~n"),
@@ -411,7 +440,7 @@ log_operation(Message) ->
 %% - ProcessedLeaders: lista dei leader già processati nella Fase 2
 %% Output:
 %% - Nessun output diretto; aggiorna `LeadersData` con i cluster adiacenti e salva i risultati in JSON
-start_phase2_for_all_leaders(Nodes, ProcessedNodes ,LeadersData, ProcessedLeaders, StartSystemPid) ->
+start_phase2_for_all_leaders(Nodes, ProcessedNodes, LeadersData, ProcessedLeaders, StartSystemPid) ->
     % Filtra i leader non ancora processati nella Fase 2
     RemainingLeaders = maps:filter(
         fun(Key, _) -> not lists:member(Key, ProcessedLeaders) end, LeadersData
@@ -430,7 +459,7 @@ start_phase2_for_all_leaders(Nodes, ProcessedNodes ,LeadersData, ProcessedLeader
             JsonData = save_leader_configuration_json(LeadersData),
             file:write_file("leaders_data.json", JsonData),
             io:format("Dati dei leader salvasti in leaders_data.json ~n"),
-            finish_setup(Nodes, ProcessedNodes , LeadersData, StartSystemPid);
+            finish_setup(Nodes, ProcessedNodes, LeadersData, StartSystemPid);
         % Se ci sono leader rimanenti, processa il primo PID rimanente
         [LeaderPid | _] ->
             % Ottiene le informazioni del leader corrente dal dizionario LeadersData
@@ -468,9 +497,14 @@ start_phase2_for_all_leaders(Nodes, ProcessedNodes ,LeadersData, ProcessedLeader
                     ),
 
                     % Richiama `start_phase2_for_all_leaders` per continuare con il prossimo leader
-                    start_phase2_for_all_leaders(Nodes, ProcessedNodes, UpdatedLeadersData, [LeaderPid | ProcessedLeaders], StartSystemPid)
-            
+                    start_phase2_for_all_leaders(
+                        Nodes,
+                        ProcessedNodes,
+                        UpdatedLeadersData,
+                        [
+                            LeaderPid | ProcessedLeaders
+                        ],
+                        StartSystemPid
+                    )
             end
     end.
-
-

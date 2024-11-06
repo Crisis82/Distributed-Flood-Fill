@@ -1,11 +1,14 @@
 erl 
 
 c(node).
-c(server).
-c(start_system).
-c(time_server).
-c(tcp_server).
+rr("node.hrl").
+c(operation).
 c(event).
+rr("event.hrl").
+c(setup).
+c(server).
+c(tcp_server).
+c(start_system).
 start_system:start(7,7).
 
 --------------------------------------------
