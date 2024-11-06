@@ -1,0 +1,60 @@
+erl 
+
+--------------------------------------------
+
+Da dentro :~/Distributed-Flood-Fill/src/erlang:
+
+# Crea la directory beam_files se non esiste
+mkdir -p ../beam_files 
+
+# Compila e salva i file .beam in beam_files
+erlc -o ../beam_files *.erl
+
+# Avvia la shell usa:
+erl -pa ../beam_files
+
+# Inserisci:
+rr("includes/node.hrl").
+rr("includes/event.hrl").
+
+start_system:start(7,7, false).
+
+--------------------------------------------
+
+c(node).
+rr("node.hrl").
+c(operation).
+c(event).
+rr("event.hrl").
+c(setup).
+c(server).
+c(tcp_server).
+c(start_system).
+c(utils).
+start_system:start(7,7, true).
+
+--------------------------------------------
+
+c(node).
+rr("node.hrl").
+c(operation).
+c(event).
+rr("event.hrl").
+c(setup).
+c(server).
+c(tcp_server).
+c(start_system).
+c(utils).
+start_system:start(7,7, false).
+
+--------------------------------------------
+
+source myenv/bin/activate
+
+python3 grid_visualizer.py
+python3 grid_visualizer.py --debug
+
+
+--------------------------------------------
+
+exit(<0.128.0>, kill).
