@@ -53,12 +53,11 @@ start(N, M) ->
     %% Itera attraverso ciascun nodo nella lista `Nodes`, assegna i vicini e aggiorna il campo neighbors
     UpdatedNodes = lists:map(
         fun(#leader{node = Node} = Leader) ->
-            Pid = Node#node.pid,
             X = Node#node.x,
             Y = Node#node.y,
 
             %% Trova i vicini basandosi direttamente sulla lista `Nodes`
-            Neighbors = find_neighbors(X, Y, Nodes, N, M),
+            Neighbors = find_neighbors(X, Y, N, M, Nodes),
 
             %% Stampa i PID dei vicini
             io:format("Node (~p, ~p) PID: ~p has neighbors: ~p~n", [X, Y, Pid, Neighbors]),
@@ -73,7 +72,7 @@ start(N, M) ->
                     self(), Pid, Neighbors
                 ]
             ),
-            Pid ! {neighbors, Neighbors},
+            SeutpPid ! {neighbors, Neighbors},
 
             %% Restituisce il Leader aggiornato
             UpdatedLeader
@@ -221,11 +220,11 @@ ack_loop(Nodes, RemainingACKs) ->
 %% Funzione per trovare i vicini di un nodo nella griglia
 %% Input:
 %% - X, Y: coordinate del nodo corrente
-%% - Nodes: lista dei nodi esistenti
 %% - N, M: dimensioni della griglia
+%% - Nodes: lista di tutti i nodi esistenti
 %% Output:
 %% - Restituisce una lista di PID dei vicini del nodo corrente
-find_neighbors(X, Y, Nodes, N, M) ->
+find_neighbors(X, Y, N, M, Nodes) ->
     NeighborCoords = [
         {X + DX, Y + DY}
      || DX <- [-1, 0, 1],

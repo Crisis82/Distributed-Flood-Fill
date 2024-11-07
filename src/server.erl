@@ -471,17 +471,17 @@ start_phase2_for_all_leaders(Nodes, ProcessedNodes, LeadersData, ProcessedLeader
             io:format("~n ------------------------------------- ~n"),
             io:format("~n Server starting Phase 2 for Leader PID: ~p~n", [LeaderPid]),
             io:format("~n ------------------------------------- ~n"),
-            io:format("Server sending start_phase2 to Leader PID: ~p with nodes: ~p~n", [
-                LeaderPid, ClusterNodes
+            io:format("Server sending start_phase2 to Setup PID: ~p with nodes: ~p~n", [
+                SetupPid, ClusterNodes
             ]),
 
-            % Invia il messaggio di avvio della Fase 2 al leader corrente
-            LeaderPid ! {start_phase2, ClusterNodes},
+            % Invia il messaggio di avvio della Fase 2 al processo di setup
+            SetupPid ! {start_phase2, lists:delete(LeaderPid, ClusterNodes)},
 
             % Attende la risposta dal leader
             receive
                 % Gestisce la risposta di completamento della Fase 2 dal leader
-                {LeaderPid, phase2_complete, _LeaderID, AdjacentClusters} ->
+                {SetupPid, phase2_complete, _LeaderID, AdjacentClusters} ->
                     % Aggiorna `LeadersData` con le informazioni sui cluster adiacenti ricevute dal leader
                     UpdatedLeaderInfo = maps:put(adjacent_clusters, AdjacentClusters, LeaderInfo),
                     UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),

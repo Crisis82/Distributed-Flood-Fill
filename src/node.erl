@@ -121,13 +121,13 @@ leader_loop(Leader) ->
         %% Updates the leaderID
         {leader_update, NewLeader} ->
             % propagate update to other cluster nodes
+            ClusterNodes = lists:delete(self(), Leader#leader.cluster_nodes),
             lists:foreach(
                 fun(child) ->
                     child ! {leader_update, NewLeader}
                 end,
-                Leader#leader.cluster_nodes
+                ClusterNodes
             ),
-
             UpdatedNode = Leader#leader.node#node{leaderID = NewLeader},
             UpdatedLeader = Leader#leader{node = UpdatedNode},
             leader_loop(UpdatedLeader);
@@ -246,29 +246,6 @@ leader_loop(Leader) ->
 
             % Transform into a regular node and start the node loop
             node_loop(UpdatedNode);
-        {update_cluster_nodes, ClusterNodes, NewLeaderID, NewColor} ->
-            Node = Leader#leader.node,
-            Neighbors = Node#node.neighbors,
-
-            UpdatedNeighbors = lists:map(
-                fun({NeighborPid, _NeighborColor, _NeighborLeaderID} = Neighbor) ->
-                    case lists:member(NeighborPid, ClusterNodes) of
-                        true ->
-                            io:format("Updating neighbor ~p with new leader ~p and color ~p.~n", [
-                                NeighborPid, NewLeaderID, NewColor
-                            ]),
-                            {NeighborPid, NewColor, NewLeaderID};
-                        false ->
-                            Neighbor
-                    end
-                end,
-                Neighbors
-            ),
-
-            UpdatedNode = Node#node{neighbors = UpdatedNeighbors},
-            UpdatedLeader = Leader#leader{node = UpdatedNode},
-
-            leader_loop(UpdatedLeader);
         %% Unhandled messages
         _Other ->
             io:format(
@@ -298,13 +275,6 @@ node_loop(Node) ->
         {leader_update, NewLeader} ->
             UpdatedNode = Node#node{leaderID = NewLeader},
             node_loop(UpdatedNode);
-        % TODO: useless. merge is done only if the leader finds a cluster
-        % with the same color after color update
-        % {merge_request, LeaderID} ->
-        %     Node#node.leaderID !
-        %         {event:new(color, utils:normalize_color(Color), Node#node.leaderID)},
-        %     node_loop(Node);
-
         % TODO: i think is useless, because nodes becomes normal only after setup
         {get_leader_info, FromPid} ->
             io:format(
