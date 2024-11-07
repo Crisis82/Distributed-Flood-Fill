@@ -32,12 +32,21 @@ start(N, M, FromFile) ->
     io:format("Sono start_system e inizio a creare nodi.~n"),
 
     Nodes = case FromFile of
-        true ->
-            Colors = load_colors_from_file("../config/colors.txt"),
-            [
-                node:new_leader(X, Y, lists:nth((Y - 1) * M + X, Colors), ServerPid, self())
-                || X <- lists:seq(1, N), Y <- lists:seq(1, M)
-            ];
+    true ->
+        Colors = load_colors_from_file("../config/colors.txt"),
+        if
+            Colors =:= [] ->
+                io:format("Errore: il file dei colori è vuoto o non contiene abbastanza colori.~n"),
+                exit(file_error);
+            length(Colors) < N * M ->
+                io:format("Errore: il file dei colori non contiene abbastanza colori per la matrice richiesta: ~p~n", [length(Colors)]),
+                exit(insufficient_colors);
+            true ->
+                [
+                    node:new_leader(X, Y, lists:nth((Y - 1) * M + X, Colors), ServerPid, self())
+                    || X <- lists:seq(1, N), Y <- lists:seq(1, M)
+                ]
+        end;
         false ->
             L = length(?palette),
             [

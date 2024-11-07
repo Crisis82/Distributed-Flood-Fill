@@ -6,7 +6,7 @@
 % -export([merge/2]).
 % merge utils
 -export([
-    merge_adjacent_clusters/3,
+    merge_adjacent_clusters/4,
     update_adj_cluster_color/4,
     update_existing_node/4,
     remove_cluster_from_adjacent/2,
@@ -34,8 +34,6 @@ change_color(Leader, Event) ->
     ),
 
     Color = Event#event.color,
-
-    
 
     % Converte il colore in atomo se non lo è già
     ColorAtom = utils:normalize_color(Color),
@@ -71,7 +69,7 @@ change_color(Leader, Event) ->
                 ),
                 % Avvia il merge sequenziale per ogni cluster con lo stesso colore
 
-                UpdatedLeader2 = merge_adjacent_clusters(SameColorAdjClusters, UpdatedLeader1, LeaderIDs),
+                UpdatedLeader2 = merge_adjacent_clusters(SameColorAdjClusters, UpdatedLeader1, LeaderIDs, Event),
                 io:format(
                     "Leader dopo tutti i merge: ~p.~n",  [UpdatedLeader2]
                 ),
@@ -116,14 +114,14 @@ change_color(Leader, Event) ->
 %%
 %% ------------------
 
-merge_adjacent_clusters([], Leader, _LeaderIDs) ->
+merge_adjacent_clusters([], Leader, _LeaderIDs,_Event) ->
     % Nessun altro cluster da gestire, restituisce il leader aggiornato
     io:format(
                     "Leader dopo tutti i merge: ~p.~n",  [Leader]
                 ),
     Leader;
 merge_adjacent_clusters(
-    [{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, LeaderIDs
+    [{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, LeaderIDs,Event
 ) ->
     io:format("Inviando merge_request al leader adiacente con PID ~p.~n", [AdjLeaderID]),
     % scrivi log
@@ -137,7 +135,7 @@ merge_adjacent_clusters(
     %     Event,
     %     io_lib:format("Inviando merge_request al leader adiacente con PID ~p", [AdjLeaderID])
     % ),
-    AdjLeaderID ! {merge_request, self()},
+    AdjLeaderID ! {merge_request, self(), Event},
     receive
         {response_to_merge, Nodes_in_Cluster, AdjListIDMaggiore} ->
             io:format("~p : Ho ricevuto response_to_merge da ~p e mi ha inviato i suoi nodi : ~p e il suo ADJ cluster: ~p~n", [
@@ -169,7 +167,7 @@ merge_adjacent_clusters(
             io:format("Aggiornamento del leader con il merge completato: ~p~n", [UpdatedLeader]),
 
             % Continua il merge per i prossimi vicini
-            merge_adjacent_clusters(Rest, UpdatedLeader, LeaderIDs)
+            merge_adjacent_clusters(Rest, UpdatedLeader, LeaderIDs, Event)
         % Timeout di esempio per evitare blocchi
     after 5000 ->
         io:format("Timeout nel ricevere la risposta dal leader adiacente con PID ~p.~n", [
@@ -218,6 +216,9 @@ update_adjacent_cluster_info(NewLeaderPid, UpdatedClusterInfo, AdjacentClusters)
     NewLeaderID = maps:get(leader_id, UpdatedClusterInfo, NewLeaderPid),
     NewEntry = {NewLeaderPid, NewColor, NewLeaderID},
     [NewEntry | AdjClustersWithoutOld].
+
+
+
 
 %% ------------------
 %%

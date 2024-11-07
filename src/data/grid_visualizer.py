@@ -11,7 +11,7 @@ import threading
 from matplotlib.colors import rgb_to_hsv
 import socket
 import numpy as np
-
+import hashlib
 import nbformat
 from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
 import time
@@ -19,6 +19,20 @@ from IPython.display import Image
 
 # Path del notebook
 notebook_path = "history_log.ipynb"
+
+# Variabile per memorizzare l'hash dei leader data precedenti
+last_leader_data_hash = None
+
+def hash_data(data):
+    """Calcola un hash unico per i dati dati."""
+    return hashlib.md5(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+# Funzione per pulire il notebook all'avvio
+def clear_notebook():
+    """Svuota il file history_log.ipynb all'avvio dello script."""
+    empty_notebook = new_notebook()
+    nbformat.write(empty_notebook, notebook_path)
+    print(f"Notebook {notebook_path} pulito.")
 
 # Funzione per loggare il cambiamento nel notebook
 def log_change_notebook(pid, color, image_path):
@@ -135,9 +149,28 @@ import sys
 DEBUG_MODE = "--debug" in sys.argv
 
 def draw_matrix(output_path=IMG_PATH):
+    
+    global last_leader_data_hash
+    
     # Carica i dati dei leader e dei nodi
     leaders_data = load_leaders_data()
+    
+    # Calcola l'hash dei dati dei leader
+    current_leader_data_hash = hash_data(leaders_data)
+    
+    # Controlla se i dati sono cambiati
+    if current_leader_data_hash == last_leader_data_hash:
+        print("I dati dei leader non sono cambiati. Salto il disegno della matrice.")
+        return  # Esci dalla funzione senza disegnare
+    
+    # Aggiorna l'hash dell'ultimo leader_data
+    last_leader_data_hash = current_leader_data_hash
+    
     nodes_data = load_nodes_data()
+    
+    output_path = f"static/default_test/snapshots/matrix_{time.strftime('%Y%m%d_%H%M%S')}.png"
+    print(f"Disegno matrice in {output_path}!")
+    
     
     # Creiamo un set dei PID dei leader
     leader_pids = {leader_data["leader_id"] for leader_data in leaders_data}
@@ -192,7 +225,13 @@ def draw_matrix(output_path=IMG_PATH):
     
     # Salva l'immagine della matrice
     fig.savefig(output_path, bbox_inches='tight', pad_inches=0)
+    fig.savefig("static/matrix.png", bbox_inches='tight', pad_inches=0)
     fig.clear()
+    
+    # Logga il cambiamento nel notebook solo se l'immagine è stata creata
+    log_change_notebook(pid="leader_pid", color="color", image_path=output_path)  # Passa pid e color effettivi se disponibili
+
+    
     return fig
 
 # Funzione per trovare il leader di un nodo basato sul suo pid
@@ -289,7 +328,16 @@ observer.start()
 # - Risposta HTTP 204 (No Content) per confermare la ricezione della richiesta
 @app.route('/notify_refresh', methods=['POST'])
 def notify_refresh():
-    draw_matrix()  # Ridisegna la matrice dei nodi
+    # draw_matrix()  # Ridisegna la matrice dei nodi
+    
+    # Definisci un percorso unico per l'immagine
+    #image_path = f"static/matrix_{time.strftime('%Y%m%d_%H%M%S')}.png"
+    
+    # Disegna la matrice e salva l'immagine con il nuovo percorso
+    #fig = draw_matrix(image_path)
+
+    # Logga il cambiamento nel notebook
+    # log_change_notebook(pid, color, image_path)
     socketio.emit('refresh')  # Notifica ai client di aggiornare la visualizzazione
     return '', 204  # Restituisce una risposta vuota con codice di stato 204
 
@@ -427,7 +475,6 @@ def home():
                     <option value="orange">Arancione</option>
                     <option value="purple">Viola</option>
                     <option value="pink">Rosa</option>
-                    <option value="grey">Grigio</option>
                 </select>
                 
                 <button type="submit">Cambia Colore</button>
@@ -503,15 +550,6 @@ def change_color():
 
     # Invia la richiesta di cambio colore al server Erlang tramite TCP
     if send_color_change_request(pid, color):
-        # Definisci un percorso unico per l'immagine
-        image_path = f"static/matrix_{time.strftime('%Y%m%d_%H%M%S')}.png"
-        
-        # Disegna la matrice e salva l'immagine con il nuovo percorso
-        fig = draw_matrix(image_path)
-
-        # Logga il cambiamento nel notebook
-        log_change_notebook(pid, color, image_path)
-
         # Notifica i client WebSocket e aggiorna la visualizzazione
         socketio.emit('refresh')
         return redirect(url_for('home'))
@@ -522,11 +560,26 @@ def change_color():
 
 # Funzione per avviare il server Flask con SocketIO per aggiornamenti in tempo reale
 def run_server():
+    clear_snapshots_folder()  # Elimina i file nella cartella snapshots all'avvio
     draw_matrix()  # Disegna inizialmente la matrice
     socketio.run(app, debug=True)
 
+# Funzione per eliminare tutti i file nella cartella snapshots
+def clear_snapshots_folder(folder_path="static/default_test/snapshots"):
+    if os.path.exists(folder_path):
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            except Exception as e:
+                print(f"Errore durante l'eliminazione del file {file_path}: {e}")
+    else:
+        os.makedirs(folder_path)  # Crea la cartella se non esiste
+
 # Avvio del server
 if __name__ == "__main__":
-    draw_matrix()  # Disegna la matrice all'avvio del server
+    clear_snapshots_folder()  # Elimina i file nella cartella snapshots
+    clear_notebook()          # Pulisce il notebook all'avvio
+    draw_matrix()             # Disegna la matrice all'avvio del server
     socketio.run(app, debug=True, use_reloader=False)
-

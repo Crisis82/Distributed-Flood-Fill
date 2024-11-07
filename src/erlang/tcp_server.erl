@@ -1,7 +1,7 @@
 -module(tcp_server).
 -export([start/0, listen/1, loop/1]).
 
--define(palette, [red, green, blue, yellow, orange, purple, pink, brown, black, white, grey]).
+-define(palette, [red, green, blue, yellow, orange, purple, pink, brown, black, white]).
 
 % Funzione di avvio del server TCP
 start() ->

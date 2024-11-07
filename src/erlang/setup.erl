@@ -364,10 +364,21 @@ wait_for_ack_from_neighbors(
                         Visited,
                         Neighbors
                     );
+                {setup_node_request, _SenderColor, _PropagatedLeaderID, FromPid} ->
+                    FromPid ! {self(), node_already_visited},
+                    wait_for_ack_from_neighbors(
+                        NeighborsToWaitFor,
+                        AccumulatedPIDs,
+                        Node,
+                        Color,
+                        StartSystemPid,
+                        Visited,
+                        Neighbors
+                    );
                 %% Timeout in caso di mancata risposta dai vicini
                 _Other ->
-                    io:format("Timeout while waiting for ACKs from neighbors: ~p, ~p~n", [
-                        NeighborsToWaitFor, _Other
+                    io:format("~p : Timeout while waiting for ACKs from neighbors: ~p, ~p~n", [
+                        self(), NeighborsToWaitFor, _Other
                     ]),
                     {ok, AccumulatedPIDs}
             end

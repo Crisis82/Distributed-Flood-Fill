@@ -150,13 +150,15 @@ leader_loop(Leader) ->
         {change_color_request , Event} ->
 
             GreaterEvent = event:greater(Leader#leader.last_event, Event),
-            
+            TimeDifference = abs(Leader#leader.last_event#event.timestamp - Event#event.timestamp),
+
             io:format(
                 "~p : Gestione della richiesta 'change_color_request'.~n" ++
                 "Ultimo evento: ~p~n" ++
                 "Nuovo evento: ~p~n" ++
-                "Risultato confronto - LAST > NEW_EVENT: ~p, NEW_EVENT > LAST: ~p~n",
-                [self(), Leader#leader.last_event, Event, GreaterEvent, not GreaterEvent]
+                "Risultato confronto - LAST > NEW_EVENT: ~p, NEW_EVENT > LAST: ~p~n" ++
+                "Differenza di tempo: ~p secondi~n",
+                [self(), Leader#leader.last_event, Event, GreaterEvent, not GreaterEvent, TimeDifference]
             ),
 
             IsColorShared = utils:check_same_color(Event#event.color, Leader#leader.adjClusters),
@@ -171,25 +173,33 @@ leader_loop(Leader) ->
                             UpdatedLeader = operation:change_color(Leader, Event),
                             leader_loop(UpdatedLeader)                            
                     end;
-                % Consistency (case 1): recover
-                not GreaterEvent andalso IsColorShared ->
+                % Consistency (case 1): recover, only if timestamp difference is within 2 seconds
+                not GreaterEvent andalso IsColorShared andalso TimeDifference =< 1 ->
                     io:format("E' un vecchio evento che richiedeva di eseguire un merge: RECOVER ~n"),
                     OldColor = Leader#leader.color,
                     % Recover recolor operation and then merge
                     Leader#leader.serverID ! {operation_request, Event, self()},
+                    receive 
+                        {server_ok, Event} ->
+                            UpdatedLeader = operation:change_color(Leader, Event)                              
+                    end,
                     % Re-apply the old color
-                    Leader#leader.serverID ! {operation_request, Event#event{color = OldColor}, self()};
-                % Consistency (case 2): drop
-                not GreaterEvent andalso not IsColorShared ->
+                    UpdatedLeader#leader.serverID ! {operation_request, Event#event{color = OldColor}, self()},
+                    receive 
+                        {server_ok, Event} ->
+                            UpdatedLeader1 = operation:change_color(UpdatedLeader, Event)                              
+                    end,
+                    leader_loop(UpdatedLeader1);
+                % Consistency (case 2): drop, only if timestamp difference is within 2 seconds
+                not GreaterEvent andalso not IsColorShared andalso TimeDifference =< 1 ->
                     io:format("E' un vecchio evento che NON richiedeva di eseguire un merge: DROP ~n"),
                     io:format("Richiesta di cambio colore rifiutata: timestamp troppo vecchio.~n");
-                % Consistency (case 3): managed by central server
-
                 % Other cases
                 true ->
                     io:format("Situazione non prevista: evento ~p", [Event])
             end,
             leader_loop(Leader);
+
 
         %% The leader receives the ok from the server to proceed with the operation
         {server_ok, Event} ->
@@ -220,19 +230,46 @@ leader_loop(Leader) ->
             % Continua il ciclo con lo stato aggiornato
             leader_loop(UpdatedLeader);
 
-        %% TODO: importare quello che manga nella funzione operation:merge, poi si puo rimuovere
-        %% Gestisco richiesta di merge da un altro leader
-        {merge_request, LeaderID} ->
+        
+        {merge_request, LeaderID, Event} ->
             io:format(
                 "~p -> Richiesta di merge ricevuta da ID ~p.~n", [
                     self(), LeaderID
                 ]
             ),
 
-            % Inform cluster about the leader update
+            % Attende 2 secondi per raccogliere eventuali messaggi di cambio colore
+            EndTime = erlang:monotonic_time(millisecond) + 1000,
+            {ok, CollectedMessages} = collect_change_color_requests(EndTime, []),
+
+            % Separare i messaggi raccolti in base al timestamp
+            OldEvents = [NewEvent || NewEvent <- CollectedMessages,
+                            NewEvent#event.timestamp < Event#event.timestamp,
+                            NewEvent#event.timestamp >= Event#event.timestamp - 2000],
+            NewEvents = [NewEvent || NewEvent <- CollectedMessages,
+                            NewEvent#event.timestamp > Event#event.timestamp],
+
+            if
+                OldEvents =/= [] ->
+                    io:format("Ricevuti eventi di cambio colore con timestamp inferiore a quello del merge. Annullamento merge.~n"),
+                    LeaderID ! {merge_rejected, self()};
+                true ->
+                    io:format("Nessun evento di cambio colore da gestire. Procedo con il merge.~n")
+            end,
+
+            % Inoltra gli eventi con timestamp superiore al leader
+            lists:foreach(
+                fun(NewEvent) ->
+                    io:format("Inoltro evento di cambio colore con timestamp superiore al leader.~n"),
+                    LeaderID ! {change_color_request, NewEvent}
+                end,
+                NewEvents
+            ),
+
+            % Informa il cluster del cambio leader
             lists:foreach(
                 fun(NodePid) ->
-                    io:format("Sending leader_update to ~p con nuovo leader ~p.~n", [
+                    io:format("Invio leader_update a ~p con nuovo leader ~p.~n", [
                         NodePid, LeaderID
                     ]),
                     NodePid ! {leader_update, LeaderID}
@@ -240,32 +277,32 @@ leader_loop(Leader) ->
                 Leader#leader.nodes_in_cluster
             ),
 
-            % Send current nodes_in_cluster and adjClusters to the new leader
+            % Invia nodes_in_cluster e adjClusters al nuovo leader
             LeaderID !
                 {response_to_merge, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters},
 
-            io:format("Sending response_to_merge to ~p con ~p e ~p.~n", [
+            io:format("Invio response_to_merge a ~p con ~p e ~p.~n", [
                 LeaderID, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
             ]),
 
-            % Update the leaderID of the current node
+            % Aggiorna leaderID del nodo corrente
             Node = Leader#leader.node,
             UpdatedNode = Node#node{leaderID = LeaderID},
 
             Leader#leader.serverID ! {remove_myself_from_leaders, self()},
 
-            % lists:foreach(
-            %    fun({pid, _NeighborColor, _NeighborLeaderID}) ->
-            %        io:format("Sending remove_myself_from_leaders to ~p.~n", [
-            %            pid
-            %        ]),
-            %        pid ! {remove_myself_from_leaders, LeaderIDMinore}
-            %    end,
-            %    Leader#leader.adjClusters
-            % ),
+            % Invia gli OldEvents a se stesso per essere gestiti dopo la trasformazione in nodo normale
+            lists:foreach(
+                fun(OldEvent) ->
+                    self() ! {change_color_request, OldEvent}
+                end,
+                OldEvents
+            ),
 
-            % Transform into a regular node and start the node loop
+            % Trasforma in nodo normale e avvia node_loop
             node_loop(UpdatedNode);
+
+
         {update_nodes_in_cluster, NodesInCluster, NewLeaderID, NewColor} ->
             Node = Leader#leader.node,
             Neighbors = Node#node.neighbors,
@@ -370,4 +407,22 @@ node_loop(Node) ->
                 ]
             ),
             node_loop(Node)
+    end.
+
+
+
+collect_change_color_requests(EndTime, Messages) ->
+    Now = erlang:monotonic_time(millisecond),
+    RemainingTime = EndTime - Now,
+    if RemainingTime =< 0 ->
+        {ok, Messages};
+    true ->
+        receive
+            {change_color_request, NewEvent} ->
+                collect_change_color_requests(EndTime, [NewEvent | Messages]);
+            _Other ->
+                collect_change_color_requests(EndTime, Messages)
+        after RemainingTime ->
+            {ok, Messages}
+        end
     end.
