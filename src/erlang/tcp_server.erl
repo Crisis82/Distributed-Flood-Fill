@@ -7,7 +7,7 @@
 start() ->
     spawn(fun() -> 
         {ok, ListenSocket} = gen_tcp:listen(8080, [binary, {packet, 0}, {active, false}]),
-        io:format("Server in ascolto su porta 8080~n"),
+        % io:format("Server in ascolto su porta 8080~n"),
         listen(ListenSocket)
     end).
 
@@ -34,36 +34,36 @@ loop(Socket) ->
 
 % Funzione per gestire i diversi tipi di messaggi
 handle_message(["change_color", IdStr, ColorStr], Socket) ->
-    io:format("Ricevuto comando di cambio colore per ID: ~p e colore: ~p~n", [IdStr, ColorStr]),
+    % io:format("Ricevuto comando di cambio colore per ID: ~p e colore: ~p~n", [IdStr, ColorStr]),
     case {convert_to_pid(IdStr), convert_to_color(ColorStr)} of
         {{ok, Pid}, {ok, Color}} ->
             Event = event:new(color, utils:normalize_color(Color), Pid),
-            io:format("TCP_SERVER : Invio messaggio {change_color_request, ~p} a ~p~n", [Event, Pid]),
+            % io:format("TCP_SERVER : Invio messaggio {change_color_request, ~p} a ~p~n", [Event, Pid]),
             Pid ! {change_color_request, Event},
             gen_tcp:send(Socket, "ok");
         {{error, _}, _} ->
-            io:format("Errore: formato PID non valido ~p~n", [IdStr]),
+            % io:format("Errore: formato PID non valido ~p~n", [IdStr]),
             gen_tcp:send(Socket, "error");
         {_, {error, _}} ->
-            io:format("Errore: colore non valido ~p~n", [ColorStr]),
+            % io:format("Errore: colore non valido ~p~n", [ColorStr]),
             gen_tcp:send(Socket, "error")
     end;
 
 handle_message(["kill", IdStr], Socket) ->
-    io:format("Ricevuto comando di kill per ID: ~p~n", [IdStr]),
+    % io:format("Ricevuto comando di kill per ID: ~p~n", [IdStr]),
     case convert_to_pid(IdStr) of
         {ok, Pid} ->
             Event = event:new(kill, undefined, Pid),
-            io:format("TCP_SERVER : Invio messaggio {kill, ~p} a ~p~n", [Pid, Event]),
+            % io:format("TCP_SERVER : Invio messaggio {kill, ~p} a ~p~n", [Pid, Event]),
             Pid ! {kill},
             gen_tcp:send(Socket, "ok");
         {error, _} ->
-            io:format("Errore: formato PID non valido ~p~n", [IdStr]),
+            % io:format("Errore: formato PID non valido ~p~n", [IdStr]),
             gen_tcp:send(Socket, "error")
     end;
 
 handle_message(_InvalidMessage, Socket) ->
-    io:format("Errore: messaggio non riconosciuto~n"),
+    % io:format("Errore: messaggio non riconosciuto~n"),
     gen_tcp:send(Socket, "error").
 
 % Funzione per convertire una stringa in un PID

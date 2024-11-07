@@ -64,24 +64,24 @@ create_node(Leader, StartSystemPid) ->
     UpdatedNode = Leader#leader.node#node{leaderID = Pid, pid = Pid},
     UpdatedLeader = Leader#leader{node = UpdatedNode},
 
-    io:format("Node (~p, ~p) created with color: ~p, PID: ~p~n", [
-        UpdatedNode#node.x, UpdatedNode#node.y, Leader#leader.color, Pid
-    ]),
+    % io:format("Node (~p, ~p) created with color: ~p, PID: ~p~n", [
+    %     UpdatedNode#node.x, UpdatedNode#node.y, Leader#leader.color, Pid
+    % ]),
     UpdatedLeader.
 
 %% Leader loop to receive messages and update state.
 leader_loop(Leader) ->
-    io:format("Sono il LEADER (~p, ~p) con PID ~p e sono pronto per ricevere nuovi messaggi!!~n", [
-        Leader#leader.node#node.x, Leader#leader.node#node.y, self()
-    ]),
+    % io:format("Sono il LEADER (~p, ~p) con PID ~p e sono pronto per ricevere nuovi messaggi!!~n", [
+    %     Leader#leader.node#node.x, Leader#leader.node#node.y, self()
+    % ]),
 
     utils:save_data(Leader),
 
     receive
         {get_leader_info, FromPid} ->
-            io:format("~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader.~n", [
-                self(), FromPid
-            ]),
+            % io:format("~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader.~n", [
+            %     self(), FromPid
+            % ]),
             FromPid ! {leader_info, Leader#leader.node#node.leaderID, Leader#leader.color},
             leader_loop(Leader);
         {new_leader_elected, NewLeaderPid} ->
@@ -150,14 +150,18 @@ leader_loop(Leader) ->
         {change_color_request , Event} ->
 
             GreaterEvent = event:greater(Leader#leader.last_event, Event),
-            TimeDifference = abs(Leader#leader.last_event#event.timestamp - Event#event.timestamp),
+            TimeDifference = abs(
+                convert_time_to_ms(Leader#leader.last_event#event.timestamp) -
+                convert_time_to_ms(Event#event.timestamp)
+            ),
+
 
             io:format(
-                "~p : Gestione della richiesta 'change_color_request'.~n" ++
+                "~n~n~p : Gestione della richiesta 'change_color_request'.~n" ++
                 "Ultimo evento: ~p~n" ++
                 "Nuovo evento: ~p~n" ++
                 "Risultato confronto - LAST > NEW_EVENT: ~p, NEW_EVENT > LAST: ~p~n" ++
-                "Differenza di tempo: ~p secondi~n",
+                "Differenza di tempo: ~p ms~n",
                 [self(), Leader#leader.last_event, Event, GreaterEvent, not GreaterEvent, TimeDifference]
             ),
 
@@ -174,7 +178,7 @@ leader_loop(Leader) ->
                             leader_loop(UpdatedLeader)                            
                     end;
                 % Consistency (case 1): recover, only if timestamp difference is within 2 seconds
-                not GreaterEvent andalso IsColorShared andalso TimeDifference =< 1 ->
+                not GreaterEvent andalso IsColorShared andalso TimeDifference =< 1000 ->
                     io:format("E' un vecchio evento che richiedeva di eseguire un merge: RECOVER ~n"),
                     OldColor = Leader#leader.color,
                     % Recover recolor operation and then merge
@@ -191,7 +195,7 @@ leader_loop(Leader) ->
                     end,
                     leader_loop(UpdatedLeader1);
                 % Consistency (case 2): drop, only if timestamp difference is within 2 seconds
-                not GreaterEvent andalso not IsColorShared andalso TimeDifference =< 1 ->
+                not GreaterEvent andalso not IsColorShared andalso TimeDifference =< 1000 ->
                     io:format("E' un vecchio evento che NON richiedeva di eseguire un merge: DROP ~n"),
                     io:format("Richiesta di cambio colore rifiutata: timestamp troppo vecchio.~n");
                 % Other cases
@@ -210,33 +214,33 @@ leader_loop(Leader) ->
             leader_loop(UpdatedLeader);
         %% Updates the color to Color of the triple with FromPid as NeighborID in adjClusters
         {color_adj_update, FromPid, Color, Nodes_in_Cluster} ->
-            io:format("~p : leader (~p, ~p) ha ricevuto color_adj_update da ~p con nuovo colore ~p.~n", [
-                self(), Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid, Color
-            ]),
-
-            % Stampa lo stato di AdjClusters prima dell'aggiornamento
-            io:format("~p : Stato di AdjClusters prima dell'aggiornamento: ~p~n", [self() , Leader#leader.adjClusters]),
-
-            UpdatedAdjClusters = operation:update_adj_cluster_color(
-                Leader#leader.adjClusters, Nodes_in_Cluster, Color, FromPid
-            ),
-
-            % Stampa lo stato di UpdatedAdjClusters dopo l'aggiornamento
-            io:format("~p : Stato di AdjClusters dopo l'aggiornamento: ~p~n", [self() , UpdatedAdjClusters]),
-
-            UpdatedLeader = Leader#leader{adjClusters = UpdatedAdjClusters},
-            UpdatedLeader#leader.serverID ! {updated_AdjCLusters, self(), UpdatedLeader},
+            % Verifica se il colore ricevuto corrisponde al colore del leader
+            if
+                Color =:= Leader#leader.color andalso self() < FromPid ->
+                    % Invia una richiesta di merge poiché il colore coincide e il PID è minore di FromPid
+                    FromPid ! {merge_request, self(), event:new(merge, Color, self())},
+                    UpdatedLeader = Leader;
+                true ->
+                    % Altrimenti, aggiorna AdjClusters come in precedenza
+                    UpdatedAdjClusters = operation:update_adj_cluster_color(
+                        Leader#leader.adjClusters, Nodes_in_Cluster, Color, FromPid
+                    ),
+                    Event1 =  event:new(change_color, Color, FromPid),
+                    UpdatedLeader = Leader#leader{adjClusters = UpdatedAdjClusters, last_event = Event1},
+                    UpdatedLeader#leader.serverID ! {updated_AdjCLusters, self(), UpdatedLeader}
+            end,
 
             % Continua il ciclo con lo stato aggiornato
             leader_loop(UpdatedLeader);
 
+
         
         {merge_request, LeaderID, Event} ->
-            io:format(
-                "~p -> Richiesta di merge ricevuta da ID ~p.~n", [
-                    self(), LeaderID
-                ]
-            ),
+            % io:format(
+            %     "~p -> Richiesta di merge ricevuta da ID ~p.~n", [
+            %         self(), LeaderID
+            %     ]
+            % ),
 
             % Attende 2 secondi per raccogliere eventuali messaggi di cambio colore
             EndTime = erlang:monotonic_time(millisecond) + 1000,
@@ -251,7 +255,7 @@ leader_loop(Leader) ->
 
             if
                 OldEvents =/= [] ->
-                    io:format("Ricevuti eventi di cambio colore con timestamp inferiore a quello del merge. Annullamento merge.~n"),
+                    % io:format("Ricevuti eventi di cambio colore con timestamp inferiore a quello del merge. Annullamento merge.~n"),
                     LeaderID ! {merge_rejected, self()};
                 true ->
                     io:format("Nessun evento di cambio colore da gestire. Procedo con il merge.~n")
@@ -260,7 +264,7 @@ leader_loop(Leader) ->
             % Inoltra gli eventi con timestamp superiore al leader
             lists:foreach(
                 fun(NewEvent) ->
-                    io:format("Inoltro evento di cambio colore con timestamp superiore al leader.~n"),
+                    % io:format("Inoltro evento di cambio colore con timestamp superiore al leader.~n"),
                     LeaderID ! {change_color_request, NewEvent}
                 end,
                 NewEvents
@@ -269,9 +273,9 @@ leader_loop(Leader) ->
             % Informa il cluster del cambio leader
             lists:foreach(
                 fun(NodePid) ->
-                    io:format("Invio leader_update a ~p con nuovo leader ~p.~n", [
-                        NodePid, LeaderID
-                    ]),
+                    % io:format("Invio leader_update a ~p con nuovo leader ~p.~n", [
+                    %     NodePid, LeaderID
+                    % ]),
                     NodePid ! {leader_update, LeaderID}
                 end,
                 Leader#leader.nodes_in_cluster
@@ -281,9 +285,9 @@ leader_loop(Leader) ->
             LeaderID !
                 {response_to_merge, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters},
 
-            io:format("Invio response_to_merge a ~p con ~p e ~p.~n", [
-                LeaderID, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
-            ]),
+            % io:format("Invio response_to_merge a ~p con ~p e ~p.~n", [
+            %     LeaderID, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
+            % ]),
 
             % Aggiorna leaderID del nodo corrente
             Node = Leader#leader.node,
@@ -311,9 +315,9 @@ leader_loop(Leader) ->
                 fun({NeighborPid, _NeighborColor, _NeighborLeaderID} = Neighbor) ->
                     case lists:member(NeighborPid, NodesInCluster) of
                         true ->
-                            io:format("Updating neighbor ~p with new leader ~p and color ~p.~n", [
-                                NeighborPid, NewLeaderID, NewColor
-                            ]),
+                            % io:format("Updating neighbor ~p with new leader ~p and color ~p.~n", [
+                            %     NeighborPid, NewLeaderID, NewColor
+                            % ]),
                             {NeighborPid, NewColor, NewLeaderID};
                         false ->
                             Neighbor
@@ -328,22 +332,22 @@ leader_loop(Leader) ->
             leader_loop(UpdatedLeader);
         %% Unhandled messages
         _Other ->
-            io:format(
-                "!!!!!!!!!!!! -> LEADER (~p, ~p) con PID ~p received an unhandled message: ~p.~n", [
-                    Leader#leader.node#node.x, Leader#leader.node#node.y, self(), _Other
-                ]
-            ),
+            % io:format(
+            %     "!!!!!!!!!!!! -> LEADER (~p, ~p) con PID ~p received an unhandled message: ~p.~n", [
+            %         Leader#leader.node#node.x, Leader#leader.node#node.y, self(), _Other
+            %     ]
+            % ),
             leader_loop(Leader)
     end.
 
 node_loop(Node) ->
-    io:format("~p -> Sono il nodo (~p, ~p) con PID ~p e sono associato al Leader ~p~n", [
-        self(),
-        Node#node.x,
-        Node#node.y,
-        Node#node.pid,
-        Node#node.leaderID
-    ]),
+    % io:format("~p -> Sono il nodo (~p, ~p) con PID ~p e sono associato al Leader ~p~n", [
+    %     self(),
+    %     Node#node.x,
+    %     Node#node.y,
+    %     Node#node.pid,
+    %     Node#node.leaderID
+    % ]),
     utils:save_data(Node),
     receive
         {change_color_request , Event} ->
@@ -370,22 +374,22 @@ node_loop(Node) ->
 
         % TODO: i think is useless, because nodes becomes normal only after setup
         {get_leader_info, FromPid} ->
-            io:format(
-                "~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader: \n"
-                "\n"
-                "                essendo un nodo normale e non sapendo il colore \n"
-                "\n"
-                "                inoltro la richiesta al mio leader.~n",
-                [
-                    self(), FromPid
-                ]
-            ),
+            % io:format(
+            %     "~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader: \n"
+            %     "\n"
+            %     "                essendo un nodo normale e non sapendo il colore \n"
+            %     "\n"
+            %     "                inoltro la richiesta al mio leader.~n",
+            %     [
+            %         self(), FromPid
+            %     ]
+            % ),
             Node#node.leaderID ! {get_leader_info, FromPid},
             node_loop(Node);
         {new_leader_elected, ServerID, Color, NodesInCluster, AdjacentClusters} ->
-            io:format("Node ~p is now the new leader of the cluster with color ~p.~n", [
-                self(), Color
-            ]),
+            % io:format("Node ~p is now the new leader of the cluster with color ~p.~n", [
+            %     self(), Color
+            % ]),
 
             %% Utilizza la funzione promote_to_leader per creare un nuovo leader
             UpdatedLeader = operation:promote_to_leader(
@@ -401,11 +405,11 @@ node_loop(Node) ->
             %% Continua come nuovo leader con lo stato aggiornato
             leader_loop(UpdatedLeader);
         _Other ->
-            io:format(
-                "!!!!!!!!!!!! -> NODE (~p, ~p) con PID ~p received an unhandled message: ~p.~n", [
-                    Node#node.x, Node#node.y, self(), _Other
-                ]
-            ),
+            % io:format(
+            %     "!!!!!!!!!!!! -> NODE (~p, ~p) con PID ~p received an unhandled message: ~p.~n", [
+            %         Node#node.x, Node#node.y, self(), _Other
+            %     ]
+            % ),
             node_loop(Node)
     end.
 
@@ -426,3 +430,7 @@ collect_change_color_requests(EndTime, Messages) ->
             {ok, Messages}
         end
     end.
+
+
+convert_time_to_ms({Hour, Minute, Second}) ->
+    (Hour * 3600 + Minute * 60 + Second) * 1000.

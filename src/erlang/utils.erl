@@ -164,8 +164,8 @@ save_leader_data_to_file(Leader) ->
     ),
 
     % Salva i dati JSON in DB/X_Y/data.json
-    file:write_file(Filename, lists:flatten(JsonData)),
-    io:format("Dati di Leader (~p,~p) con PID ~p salvati in: ~s~n", [X, Y, self(), Filename]).
+    file:write_file(Filename, lists:flatten(JsonData)).
+    % io:format("Dati di Leader (~p,~p) con PID ~p salvati in: ~s~n", [X, Y, self(), Filename]).
 
 %% Funzione helper per convertire la lista di cluster adiacenti in formato JSON-friendly
 convert_adj_clusters(AdjClusters) ->
@@ -205,11 +205,9 @@ log_operation(Event) ->
     LogEntry = io_lib:format("~s: {~p, ~p, ~p}~n", [
         TimestampStr, Event#event.type, Event#event.color, Reference
     ]),
-    file:write_file(LogFile, lists:flatten(LogEntry), [append]),
+    file:write_file(LogFile, lists:flatten(LogEntry), [append]).
 
-    io:format("Operazione loggata: '~s: {~p, ~p, ~p}'~n", [
-        TimestampStr, Event#event.type, Event#event.color, Reference
-    ]).
+    % io:format("Operazione loggata: '~s: {~p, ~p, ~p}'~n", [TimestampStr, Event#event.type, Event#event.color, Reference]).
 
 get_reference(Pid) ->
     {_, Reference} = process_info(Pid, registered_name),
@@ -223,7 +221,7 @@ get_reference(Pid) ->
 
 save_data(NodeOrLeader) ->
     % Extract Node and Leader data accordingly
-    io:format("SALVO I DATI~n"),
+    % io:format("SALVO I DATI~n"),
     case NodeOrLeader of
         #node{} = Node ->
             % Handle node data saving
@@ -259,5 +257,5 @@ save_node_data_to_file(Node) ->
     ),
 
     % Save the JSON data to the file
-    file:write_file(Filename, lists:flatten(JsonData)),
-    io:format("Node data saved in: ~s~n", [Filename]).
+    file:write_file(Filename, lists:flatten(JsonData)).
+    % io:format("Node data saved in: ~s~n", [Filename]).
