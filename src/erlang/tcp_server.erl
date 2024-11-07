@@ -32,12 +32,12 @@ loop(Socket) ->
             gen_tcp:close(Socket)
     end.
 
-% Funzione per gestire i diversi tipi di messaggi
-handle_message(["change_color", IdStr, ColorStr], Socket) ->
+handle_message(["change_color", IdStr, ColorStr, HH_str, MM_str, SS_str], Socket) ->
     % io:format("Ricevuto comando di cambio colore per ID: ~p e colore: ~p~n", [IdStr, ColorStr]),
     case {convert_to_pid(IdStr), convert_to_color(ColorStr)} of
         {{ok, Pid}, {ok, Color}} ->
-            Event = event:new(color, utils:normalize_color(Color), Pid),
+            Timestamp = parse_time(HH_str, MM_str, SS_str),
+            Event = event:new_with_timestamp(color, utils:normalize_color(Color), Pid, Timestamp),
             % io:format("TCP_SERVER : Invio messaggio {change_color_request, ~p} a ~p~n", [Event, Pid]),
             Pid ! {change_color_request, Event},
             gen_tcp:send(Socket, "ok");
@@ -49,11 +49,13 @@ handle_message(["change_color", IdStr, ColorStr], Socket) ->
             gen_tcp:send(Socket, "error")
     end;
 
-handle_message(["kill", IdStr], Socket) ->
+
+handle_message(["kill", IdStr, HH_str, MM_str, SS_str], Socket) ->
     % io:format("Ricevuto comando di kill per ID: ~p~n", [IdStr]),
     case convert_to_pid(IdStr) of
         {ok, Pid} ->
-            Event = event:new(kill, undefined, Pid),
+            Timestamp = parse_time(HH_str, MM_str, SS_str),
+            Event = event:new_with_timestamp(kill, undefined, Pid, Timestamp),
             % io:format("TCP_SERVER : Invio messaggio {kill, ~p} a ~p~n", [Pid, Event]),
             Pid ! {kill},
             gen_tcp:send(Socket, "ok");
@@ -81,3 +83,7 @@ convert_to_color(ColorStr) ->
         true -> {ok, ColorAtom};
         false -> {error, invalid_color}
     end.
+
+% Funzione di parsing per trasformare il timestamp in formato {Hour, Minute, Second}
+parse_time(HH_str, MM_str, SS_str) ->
+    {list_to_integer(HH_str), list_to_integer(MM_str), list_to_integer(SS_str)}.

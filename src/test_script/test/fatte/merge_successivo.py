@@ -6,6 +6,7 @@ import time
 import random
 import psutil
 import shutil
+from datetime import datetime
 
 # Percorso della directory principale
 
@@ -37,9 +38,41 @@ PORT = 8080
 # Lista di colori disponibili per il test
 COLORS = ["red", "green", "blue", "yellow", "purple"]
 
+TAVOLOZZA = [
+    "red",
+    "blue",
+    "yellow",
+    "red",
+    "purple",
+    "purple",
+    "blue",
+    "purple",
+    "yellow",
+    "blue",
+    "purple",
+    "yellow",
+    "yellow",
+    "green",
+    "purple",
+    "yellow",
+    "yellow",
+    "red",
+    "yellow",
+    "blue",
+    "blue",
+    "yellow",
+    "red",
+    "purple",
+    "purple"
+]
+
 # Funzione per generare un file colori per una matrice NxM
-def generate_colors_file(N, M):
-    colors = [random.choice(COLORS) for _ in range(N * M)]
+def generate_colors_file(N, M, random):
+    
+    if random:
+        colors = [random.choice(COLORS) for _ in range(N * M)]
+    else:
+        colors = TAVOLOZZA
     colors_filepath = os.path.join(os.path.dirname(__file__), "..", "config", "colors.txt")
     with open(colors_filepath, "w") as file:
         file.write("\n".join(colors))
@@ -73,11 +106,13 @@ def load_nodes_data():
         return []
 
 # Funzione per inviare una richiesta di cambio colore al server Erlang tramite TCP
-def send_color_change_request(pid, color):
+def send_color_change_request(pid, color, time):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((HOST, PORT))
-            message = f"change_color,{pid},{color}"
+            
+            
+            message = f"change_color,{pid},{color},{time.hour},{time.minute},{time.second}"
             print(f"Inviando il messaggio di cambio colore: {message}")
             s.sendall(message.encode('utf-8'))
             response = s.recv(1024).decode('utf-8')
@@ -131,6 +166,34 @@ def perform_multiple_operations(num_color_changes, num_kills, interval):
         # Pausa tra le operazioni
         time.sleep(interval)
 
+
+# Funzione per eseguire operazioni multiple di cambio colore e kill
+def perform_multiple_operations(interval):
+    nodes_data = load_nodes_data()
+    
+    operations =[
+        (get_pid_by_coordinates(nodes_data, 1, 1), "pink", datetime.now()),
+        (get_pid_by_coordinates(nodes_data, 2, 2), "pink", datetime.now()),
+    ]
+
+    for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
+        operation = operations[i]
+        pid , color, t = operation
+        send_color_change_request(pid, color, t)
+        # Pausa tra le operazioni
+        time.sleep(interval)
+
+
+def get_pid_by_coordinates(data, x, y):
+    # Supponendo che il `pid` desiderato sia presente nei nodi o nei cluster adiacenti
+    for node in data:
+        node_x, node_y = node["x"] , node["y"]
+        if node_x == x and node_y == y:
+            return node["pid"]
+
+    return None  # Se non trovato
+
+
 # Funzione principale
 def main(N, M, num_color_changes, num_kills, interval):
     # Utilizza la funzione per liberare la porta 8080
@@ -142,10 +205,11 @@ def main(N, M, num_color_changes, num_kills, interval):
     elimina_DB()
 
     # Genera il file colors.txt
-    generate_colors_file(N, M)
+    generate_colors_file(N, M, False)
 
     # Esegui le operazioni una volta che l'utente conferma di aver avviato Erlang
-    perform_multiple_operations(num_color_changes, num_kills, interval)
+    # perform_multiple_operations(num_color_changes, num_kills, interval)
+    perform_multiple_operations(interval)
 
 
 def kill_process_on_port(port):

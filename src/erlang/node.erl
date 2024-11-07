@@ -182,25 +182,27 @@ leader_loop(Leader) ->
                     io:format("E' un vecchio evento che richiedeva di eseguire un merge: RECOVER ~n"),
                     OldColor = Leader#leader.color,
                     % Recover recolor operation and then merge
+                    io:format("Change color to ~p ~n", [Event#event.color]),
                     Leader#leader.serverID ! {operation_request, Event, self()},
                     receive 
                         {server_ok, Event} ->
                             UpdatedLeader = operation:change_color(Leader, Event)                              
                     end,
                     % Re-apply the old color
-                    UpdatedLeader#leader.serverID ! {operation_request, Event#event{color = OldColor}, self()},
+                    io:format("Re-apply: ~p ~n", [OldColor]),
+                    NewEvent = Event#event{color = OldColor},
+                    UpdatedLeader#leader.serverID ! {operation_request, NewEvent, self()},
                     receive 
-                        {server_ok, Event} ->
-                            UpdatedLeader1 = operation:change_color(UpdatedLeader, Event)                              
+                        {server_ok, NewEvent} ->
+                            UpdatedLeader1 = operation:change_color(UpdatedLeader, NewEvent)                              
                     end,
                     leader_loop(UpdatedLeader1);
                 % Consistency (case 2): drop, only if timestamp difference is within 2 seconds
                 not GreaterEvent andalso not IsColorShared andalso TimeDifference =< 1000 ->
-                    io:format("E' un vecchio evento che NON richiedeva di eseguire un merge: DROP ~n"),
-                    io:format("Richiesta di cambio colore rifiutata: timestamp troppo vecchio.~n");
+                    io:format("E' un vecchio evento che NON richiedeva di eseguire un merge: DROP ~n");
                 % Other cases
                 true ->
-                    io:format("Situazione non prevista: evento ~p", [Event])
+                    io:format("Troppo vecchio ~p", [Event])
             end,
             leader_loop(Leader);
 
@@ -217,9 +219,8 @@ leader_loop(Leader) ->
             % Verifica se il colore ricevuto corrisponde al colore del leader
             if
                 Color =:= Leader#leader.color andalso self() < FromPid ->
-                    % Invia una richiesta di merge poiché il colore coincide e il PID è minore di FromPid
-                    FromPid ! {merge_request, self(), event:new(merge, Color, self())},
-                    UpdatedLeader = Leader;
+                    Event = event:new(change_color, Color, self()),
+                    UpdatedLeader = operation:change_color(Leader, Event);
                 true ->
                     % Altrimenti, aggiorna AdjClusters come in precedenza
                     UpdatedAdjClusters = operation:update_adj_cluster_color(
@@ -236,46 +237,61 @@ leader_loop(Leader) ->
 
         
         {merge_request, LeaderID, Event} ->
-            % io:format(
-            %     "~p -> Richiesta di merge ricevuta da ID ~p.~n", [
-            %         self(), LeaderID
-            %     ]
-            % ),
+
+            % Verifica se il colore dell'evento è diverso da quello del leader, indicando un change_color precedente
+            if 
+                Event#event.color =/= Leader#leader.color ->
+                    io:format("~p -> Richiesta di merge ricevuta da ID ~p.~n", [self(), LeaderID]),
+                    io:format("~p -> Richiesta di merge: ~p.~n",  [self(), Event]),
+                    io:format("Il colore dell'evento non coincide con il colore attuale del leader. Cambio colore rilevato.~n");
+                true ->
+                    io:format("~p -> Richiesta di merge ricevuta da ID ~p.~n", [self(), LeaderID]),
+                    io:format("~p -> Richiesta di merge: ~p.~n",  [self(), Event])
+            end,
 
             % Attende 2 secondi per raccogliere eventuali messaggi di cambio colore
-            EndTime = erlang:monotonic_time(millisecond) + 1000,
+            EndTime = erlang:monotonic_time(millisecond) + 2000,
             {ok, CollectedMessages} = collect_change_color_requests(EndTime, []),
 
-            % Separare i messaggi raccolti in base al timestamp
-            OldEvents = [NewEvent || NewEvent <- CollectedMessages,
-                            NewEvent#event.timestamp < Event#event.timestamp,
-                            NewEvent#event.timestamp >= Event#event.timestamp - 2000],
-            NewEvents = [NewEvent || NewEvent <- CollectedMessages,
-                            NewEvent#event.timestamp > Event#event.timestamp],
+            io:format("Ricevuti eventi : ~p.~n", [CollectedMessages]),
 
+            % Converti il timestamp dell'evento corrente in millisecondi
+            EventTimestampMs = convert_time_to_ms(Event#event.timestamp),
+
+            % Separare i messaggi raccolti in base al timestamp in millisecondi
+            OldEvents = [NewEvent || NewEvent <- CollectedMessages,
+                            convert_time_to_ms(NewEvent#event.timestamp) < EventTimestampMs,
+                            convert_time_to_ms(NewEvent#event.timestamp) >= EventTimestampMs - 2000],
+            NewEvents = [NewEvent || NewEvent <- CollectedMessages,
+                            convert_time_to_ms(NewEvent#event.timestamp) > EventTimestampMs],
+
+            io:format("Ricevuti eventi di cambio colore con timestamp inferiore a quello del merge: ~p.~n", [OldEvents]),
+            io:format("Ricevuti eventi di cambio colore con timestamp superiore a quello del merge: ~p.~n", [NewEvents]),
+
+            % Gestione degli eventi di cambio colore precedenti (OldEvents)
             if
                 OldEvents =/= [] ->
-                    % io:format("Ricevuti eventi di cambio colore con timestamp inferiore a quello del merge. Annullamento merge.~n"),
-                    LeaderID ! {merge_rejected, self()};
+                    io:format("Ricevuti eventi di cambio colore con timestamp inferiore a quello del merge. Annullamento merge.~n"),
+                    LeaderID ! {merge_rejected, self()},
+
+                    % Invia a se stesso il messaggio di change_color_request per ciascun evento in OldEvents
+                    lists:foreach(fun(Event_change_color) ->
+                        self() ! {change_color_request, Event_change_color}
+                    end, OldEvents),
+
+                    leader_loop(Leader);
                 true ->
                     io:format("Nessun evento di cambio colore da gestire. Procedo con il merge.~n")
             end,
 
-            % Inoltra gli eventi con timestamp superiore al leader
-            lists:foreach(
-                fun(NewEvent) ->
-                    % io:format("Inoltro evento di cambio colore con timestamp superiore al leader.~n"),
-                    LeaderID ! {change_color_request, NewEvent}
-                end,
-                NewEvents
-            ),
+            % Procedi con il merge
 
             % Informa il cluster del cambio leader
             lists:foreach(
                 fun(NodePid) ->
-                    % io:format("Invio leader_update a ~p con nuovo leader ~p.~n", [
-                    %     NodePid, LeaderID
-                    % ]),
+                    io:format("Invio leader_update a ~p con nuovo leader ~p.~n", [
+                        NodePid, LeaderID
+                    ]),
                     NodePid ! {leader_update, LeaderID}
                 end,
                 Leader#leader.nodes_in_cluster
@@ -285,9 +301,9 @@ leader_loop(Leader) ->
             LeaderID !
                 {response_to_merge, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters},
 
-            % io:format("Invio response_to_merge a ~p con ~p e ~p.~n", [
-            %     LeaderID, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
-            % ]),
+            io:format("~p : Invio response_to_merge a ~p con ~p e ~p.~n", [
+                self() ,LeaderID, Leader#leader.nodes_in_cluster, Leader#leader.adjClusters
+            ]),
 
             % Aggiorna leaderID del nodo corrente
             Node = Leader#leader.node,
@@ -295,17 +311,33 @@ leader_loop(Leader) ->
 
             Leader#leader.serverID ! {remove_myself_from_leaders, self()},
 
-            % Invia gli OldEvents a se stesso per essere gestiti dopo la trasformazione in nodo normale
+            % Invia un change_color_request con il nuovo colore se c'è stato un cambio colore precedente
+            if 
+                Event#event.color =/= Leader#leader.color ->
+                    % Crea un nuovo evento con il timestamp corrente e il colore aggiornato
+                    NewEvent = Event#event{timestamp = erlang:time()},
+                    
+                    io:format("Invio un change_color_request con il nuovo colore: ~p e timestamp: ~p.~n", 
+                            [NewEvent#event.color, NewEvent#event.timestamp]),
+
+                    % Invia a se stesso il messaggio di change_color_request con il nuovo evento
+                    self() ! {change_color_request, NewEvent};
+                true -> ok
+            end,
+
+
+            % Inoltra gli eventi con timestamp superiore al leader
             lists:foreach(
-                fun(OldEvent) ->
-                    self() ! {change_color_request, OldEvent}
+                fun(NewEvent) ->
+                    self() ! {change_color_request, NewEvent}
                 end,
-                OldEvents
+                NewEvents
             ),
+
+            
 
             % Trasforma in nodo normale e avvia node_loop
             node_loop(UpdatedNode);
-
 
         {update_nodes_in_cluster, NodesInCluster, NewLeaderID, NewColor} ->
             Node = Leader#leader.node,
@@ -423,8 +455,10 @@ collect_change_color_requests(EndTime, Messages) ->
     true ->
         receive
             {change_color_request, NewEvent} ->
+                io:format("Ho ricevuto un messaggio! ~n"),
                 collect_change_color_requests(EndTime, [NewEvent | Messages]);
             _Other ->
+                io:format("Ho ricevuto un messaggio! ~n"),
                 collect_change_color_requests(EndTime, Messages)
         after RemainingTime ->
             {ok, Messages}

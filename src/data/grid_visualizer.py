@@ -201,18 +201,22 @@ def draw_matrix(output_path=IMG_PATH):
         # Aggiunge un rettangolo per il nodo
         ax.add_patch(Rectangle((y - 1, max_x - x), 1, 1, color=rgb, ec="black"))
         
-        # Disegna connessioni tra nodi dello stesso cluster
-        draw_cluster_connections(ax, x, y, pid, position_map, leaders_data, max_x, max_y)
+        
 
         # Determina il colore del testo
         text_color = "white" if is_dark_color(rgb) else "black"
 
-        # Aggiunge le coordinate del nodo
-        ax.text(y - 0.5, max_x - x + 0.3, f"({x},{y})", ha="center", va="center", color=text_color, fontsize=8, weight="bold")
+        
 
-        # Aggiunge il PID in modalità debug
+        
         if DEBUG_MODE:
+            # Disegna connessioni tra nodi dello stesso cluster
+            draw_cluster_connections(ax, x, y, pid, position_map, leaders_data, max_x, max_y)
+            # Aggiunge il PID in modalità debug
             ax.text(y - 0.5, max_x - x + 0.7, f"{pid}", ha="center", va="center", color=text_color, fontsize=8, weight="bold")
+            # Aggiunge le coordinate del nodo
+            ax.text(y - 0.5, max_x - x + 0.3, f"({x},{y})", ha="center", va="center", color=text_color, fontsize=8, weight="bold")
+            
 
         # **Aggiunge la "L" se il nodo è un leader**
         if pid in leader_pids:
