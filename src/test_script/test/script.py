@@ -105,7 +105,7 @@ def send_color_change_request(pid, color, timestamp):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((HOST, PORT))
             message = f"change_color,{pid},{color},{timestamp.hour},{timestamp.minute},{timestamp.second}"
-            print(f"Inviando il messaggio di cambio colore: {message}")
+            print(f"\nInviando il messaggio di cambio colore: {message}")
             s.sendall(message.encode('utf-8'))
             response = s.recv(1024).decode('utf-8')
             print(f"Risposta dal server: {response}")
@@ -137,7 +137,7 @@ def kill_process_on_port(port):
             continue
     print(f"Nessun processo trovato sulla porta {port}.")
     return False
-
+ 
 
 def too_old():
     nodes_data = load_nodes_data()
@@ -219,6 +219,8 @@ def merge_successivo():
     operations =[
         (get_pid_by_coordinates(nodes_data, 1, 1), "pink", datetime.now()),
         (get_pid_by_coordinates(nodes_data, 2, 2), "pink", datetime.now()),
+        (get_pid_by_coordinates(nodes_data, 5, 4), "pink", datetime.now()),
+        (get_pid_by_coordinates(nodes_data, 4, 5), "pink", datetime.now()),
     ]
 
     for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
@@ -243,7 +245,20 @@ def change_color_during_merge():
         # Pausa tra le operazioni
         time.sleep(0.5)    
 
+def doubleMerge():
+    nodes_data = load_nodes_data()
+    
+    operations =[
+        (get_pid_by_coordinates(nodes_data, 3, 2), "green", datetime.now()),
+        (get_pid_by_coordinates(nodes_data, 5, 3), "green", datetime.now()),
+    ]
 
+    for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
+        operation = operations[i]
+        pid , color, t = operation
+        send_color_change_request(pid, color, t)
+        # Pausa tra le operazioni
+        time.sleep(0.1)   
 # DA FINIRE
 
 """
@@ -277,32 +292,34 @@ def main():
 
     # Chiede all'utente quale funzione eseguire
     print("Scegli un'operazione da eseguire:")
-    print("1. too_old")
-    print("2. case1")
-    print("3. case2")
-    print("4. case3")
+    
+    print("1. case1")
+    print("2. case2")
+    print("3. case3")
+    print("4. too_old")
     print("5. merge_successivo")
     print("6. change_color_during_merge")
+    print("7. doubleMerge")
 
     choice = input("Inserisci il numero dell'operazione desiderata: ")
 
     if choice == "1":
-        too_old()
-    elif choice == "2":
         case1()
-    elif choice == "3":
+    elif choice == "2":
         case2()
-    elif choice == "4":
+    elif choice == "3":
         case3()
+    elif choice == "4":
+        too_old()
     elif choice == "5":
         merge_successivo()
     elif choice == "6":
         change_color_during_merge()
+    elif choice == "7":
+        doubleMerge()
     else:
         print("Scelta non valida. Uscita dal programma.")
 
 if __name__ == "__main__":
     main()
 
-if __name__ == "__main__":
-    main()

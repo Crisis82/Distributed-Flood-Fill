@@ -116,7 +116,7 @@ def send_color_change_request(pid, color, time):
             
             
             message = f"change_color,{pid},{color},{time.hour},{time.minute},{time.second}"
-            print(f"Inviando il messaggio di cambio colore: {message}")
+            print(f"\nInviando il messaggio di cambio colore: {message}")
             s.sendall(message.encode('utf-8'))
             response = s.recv(1024).decode('utf-8')
             print(f"Risposta dal server: {response}")

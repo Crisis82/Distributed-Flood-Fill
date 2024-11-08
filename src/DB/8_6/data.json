@@ -1,5 +1,0 @@
-{
-"leader_id": "<0.145.0>", "color": "blue", "server_id": "<0.80.0>", "adj_clusters": [{"pid": "<0.146.0>", "color": "yellow", "leader_id": "<0.146.0>"},{"pid": "<0.144.0>", "color": "red", "leader_id": "<0.143.0>"},{"pid": "<0.138.0>", "color": "red", "leader_id": "<0.138.0>"},{"pid": "<0.135.0>", "color": "green", "leader_id": "<0.128.0>"},{"pid": "<0.134.0>", "color": "yellow", "leader_id": "<0.134.0>"}], "nodes_in_cluster": ["<0.145.0>"],
-"node": {
-"x": 8, "y": 6, "parent": "<0.80.0>", "children": [], "time": "undefined", "leader_id": "<0.145.0>", "pid": "<0.145.0>", "neighbors": []
-}}
