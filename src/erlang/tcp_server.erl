@@ -6,8 +6,10 @@
 % Funzione di avvio del server TCP
 start() ->
     spawn(fun() -> 
-        {ok, ListenSocket} = gen_tcp:listen(8080, [binary, {packet, 0}, {active, false}]),
-        % io:format("Server in ascolto su porta 8080~n"),
+        {ok, ListenSocket} = gen_tcp:listen(0, [binary, {packet, 0}, {active, false}]),
+        {ok, Port} = inet:port(ListenSocket),
+        io:format("Server in ascolto su porta ~p~n", [Port]),
+        io:format("Comando: ~n python3 grid_visualizer.py --debug True --port ~p", [Port]),
         listen(ListenSocket)
     end).
 

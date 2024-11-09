@@ -12,6 +12,15 @@ N=$1
 M=$2
 FROM_FILE=$3
 
+# Imposta la porta che desideri utilizzare (sostituisci con la porta corretta se nota)
+PORTA=8080
+
+# Controlla se la porta è occupata e termina il processo se necessario
+if lsof -i :$PORTA >/dev/null; then
+    echo "La porta $PORTA è già in uso. Terminando il processo sulla porta."
+    sudo fuser -k $PORTA/tcp
+fi
+
 # Crea la directory beam_files se non esiste
 mkdir -p ../beam_files
 

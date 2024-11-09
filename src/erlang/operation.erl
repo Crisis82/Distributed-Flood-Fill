@@ -101,7 +101,7 @@ change_color(Leader, Event) ->
     % Comunica al server la fine del color change
     UpdatedLeader#leader.serverID ! {change_color_complete, self(), UpdatedLeader},
 
-    utils:log_operation(Event),
+    % utils:log_operation(Event),
 
     % io:format("FINAL CONFIGURATION for the NEW leader ~p : ~p~n", [self(),UpdatedLeader]),
     UpdatedLeader.
@@ -125,11 +125,11 @@ merge_adjacent_clusters([], Leader, _LeaderIDs, _Event) ->
     Leader;
 
 merge_adjacent_clusters([{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, LeaderIDs, Event) ->
-    % io:format("~p : Inviando merge_request al leader adiacente con PID ~p, mancano: ~p.~n", [self(), AdjLeaderID, Rest]),
-    
+    % Invia la richiesta di merge al leader adiacente
     AdjLeaderID ! {merge_request, self(), Event},
     receive
-        {response_to_merge, Nodes_in_Cluster, AdjListIDMaggiore, FromPid} ->
+        {response_to_merge, Nodes_in_Cluster, AdjListIDMaggiore, FromPid} when FromPid == AdjLeaderID ->
+            io:format("~p : HO RICEVUTO response_to_merge da ~p, DENTRO merge_adjacent_clusters~n", [self(), FromPid]),
             UpdatedAdjClusters = utils:join_adj_clusters(Leader#leader.adjClusters, AdjListIDMaggiore),
             FilteredAdjClusters = lists:filter(
                 fun({_, _, LeaderID}) ->
@@ -144,19 +144,36 @@ merge_adjacent_clusters([{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Le
                 adjClusters = FilteredAdjClusters,
                 nodes_in_cluster = UpdatedNodeList
             },
-            merge_adjacent_clusters(Rest, UpdatedLeader, LeaderIDs, Event);
-        {merge_rejected, _} ->
-            merge_adjacent_clusters(Rest, Leader, LeaderIDs, Event);    
-        % Clausola per messaggi inaspettati
-        OtherMessage ->
-            % io:format("Messaggio inaspettato ricevuto: ~p. Inoltro al processo corrente.~n", [OtherMessage]),
-            self() ! OtherMessage,
+            io:format("~p : HO GESTITO response_to_merge di ~p, DENTRO merge_adjacent_clusters~n", [self(), FromPid]),
+            
+            FromPid ! {became_node, self()},
+            receive
+                {turned_to_node, FromPid} ->
+                    merge_adjacent_clusters(Rest, UpdatedLeader, LeaderIDs, Event);
+                % Clausola per reinserire solo i messaggi color_adj_update
+                {color_adj_update, Color, FromPid, AdjLeaderID} ->
+                    self() ! {color_adj_update, Color, FromPid, AdjLeaderID},
+                    merge_adjacent_clusters(Rest, UpdatedLeader, LeaderIDs, Event)
+            after 4000 -> % Timeout di 2 secondi per la risposta turned_to_node
+                io:format("~p : Timeout in attesa di turned_to_node da ~p, passo al successivo.~n", [self(), FromPid]),
+                merge_adjacent_clusters(Rest, Leader, LeaderIDs, Event)
+            end;
+
+        {merge_rejected, FromPid} when FromPid == AdjLeaderID ->
+            io:format("~p : Messaggio ricevuto: {~p,~p}.~n", [self(), merge_rejected, FromPid]),
+            merge_adjacent_clusters(Rest, Leader, LeaderIDs, Event);
+
+        % Clausola per reinserire solo i messaggi color_adj_update
+        {color_adj_update, Color, FromPid, AdjLeaderID} ->
+            self() ! {color_adj_update, Color, FromPid, AdjLeaderID},
             merge_adjacent_clusters([{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, LeaderIDs, Event)
         
     after 5000 ->
-    %    io:format("Timeout nel ricevere la risposta dal leader adiacente con PID ~p.~n", [AdjLeaderID]),
         merge_adjacent_clusters(Rest, Leader, LeaderIDs, Event)
     end.
+
+
+
 
 update_adj_cluster_color(AdjClusters, NodesInCluster, NewColor, NewLeaderID) ->
     lists:foldl(

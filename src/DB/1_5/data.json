@@ -1,5 +1,0 @@
-{
-"leader_id": "<0.89.0>", "color": "blue", "server_id": "<0.82.0>", "adj_clusters": [{"pid": "<0.112.0>", "color": "red", "leader_id": "<0.111.0>"},{"pid": "<0.111.0>", "color": "red", "leader_id": "<0.111.0>"},{"pid": "<0.104.0>", "color": "purple", "leader_id": "<0.95.0>"},{"pid": "<0.103.0>", "color": "purple", "leader_id": "<0.95.0>"},{"pid": "<0.98.0>", "color": "purple", "leader_id": "<0.95.0>"},{"pid": "<0.96.0>", "color": "green", "leader_id": "<0.113.0>"},{"pid": "<0.95.0>", "color": "purple", "leader_id": "<0.95.0>"},{"pid": "<0.91.0>", "color": "yellow", "leader_id": "<0.91.0>"},{"pid": "<0.90.0>", "color": "green", "leader_id": "<0.113.0>"},{"pid": "<0.88.0>", "color": "green", "leader_id": "<0.113.0>"}], "nodes_in_cluster": ["<0.105.0>","<0.97.0>","<0.89.0>"],
-"node": {
-"x": 1, "y": 5, "parent": "<0.82.0>", "children": [], "time": "undefined", "leader_id": "<0.89.0>", "pid": "<0.89.0>", "neighbors": []
-}}

@@ -196,9 +196,6 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
             server_loop(Nodes, ProcessedNodes, UpdatedLeadersData, StartSystemPid);
 
 
-
-
-
         {operation_request, Event, FromPid} ->
             % TODO: for now just responds ok. To implement a operation queue
             FromPid ! {server_ok, Event},
@@ -245,25 +242,81 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
         DeadLeaders
     ),
 
-    io:format("~n~nCONTROLLO SE CI SONO CLUSTER ADIACENTI CON STESSO COLORE!~n~n"),
+    io:format("~nVERIFICO SE CI SONO CLUSTER ADIACENTI CON STESSO COLORE!~n~n"),
 
-    % Passo 2: Controllare se ci sono cluster adiacenti con lo stesso colore
-    ClusterPairs = [{LeaderPid, maps:get(adjacent_clusters, maps:get(LeaderPid, UpdatedLeadersData))}
-                    || LeaderPid <- maps:keys(UpdatedLeadersData)],
+    %%%%%
+
+    % Seed the random number generator if not already seeded
+    case get(rand_seeded) of
+        true ->
+            ok;
+        undefined ->
+            rand:seed(exsplus),
+            put(rand_seeded, true)
+    end,
+
+
+    io:format("Leaders DATA : ~p ~n~n",[LeadersData]),
+
+    % Per ogni leader, controlla i cluster adiacenti con lo stesso colore
+    LeaderPids = maps:keys(LeadersData),
     lists:foreach(
-        fun({LeaderPid, AdjClusters}) ->
-            % Cerca i cluster adiacenti con lo stesso colore
-            SameColorAdj = [{PID, Color} || {PID, Color} <- AdjClusters, Color == maps:get(color, maps:get(LeaderPid, UpdatedLeadersData))],
-            case SameColorAdj of
-                [] -> ok;
-                [{PID, Color} | _] ->
-                    % Crea l'evento per il cambio colore e invialo al LeaderPid
-                    Event = event:new(change_color, Color, self()),
+        fun(LeaderPid) ->
+            LeaderInfo = maps:get(LeaderPid, LeadersData),
+            Color = maps:get(color, LeaderInfo),
+            AdjacentClusters = maps:get(adjacent_clusters, LeaderInfo, []),
+
+            % Aggiungi log per diagnosticare il contenuto di AdjacentClusters
+            % io:format("~nLeader ~p ha i seguenti cluster adiacenti: ~p~n", [LeaderPid, AdjacentClusters]),
+
+            % Ora, per ciascun AdjacentCluster (come tupla) in AdjacentClusters, verifica se ha lo stesso colore
+            AdjacentLeadersWithSameColor = lists:foldl(
+                fun({_, NeighborColor, AdjacentLeaderPid}, Acc) ->
+                    case maps:is_key(AdjacentLeaderPid, LeadersData) of
+                        true ->
+                            if NeighborColor == Color ->
+                                [AdjacentLeaderPid | Acc];
+                            true ->
+                                Acc
+                            end;
+                        false ->
+                            %io:format("Leader adiacente ~p non trovato in LeadersData~n", [AdjacentLeaderPid]),
+                            Acc
+                    end
+                end,
+                [],
+                AdjacentClusters
+            ),
+
+            % Rimuove duplicati
+            AdjacentLeadersWithSameColorUnique = lists:usort(AdjacentLeadersWithSameColor),
+
+            % Rimuove il leader corrente dalla lista se presente
+            SameColorLeadersWithoutSelf = lists:delete(LeaderPid, AdjacentLeadersWithSameColorUnique),
+
+            case SameColorLeadersWithoutSelf of
+                [] ->
+                    % io:format("Nessun leader adiacente con lo stesso colore per il leader ~p~n", [LeaderPid]),
+                    ok; % Nessuna azione se non ci sono leader adiacenti con lo stesso colore
+                SameColorLeaders ->
+                    io:format("~n~nCI SONO CLUSTER ADIACENTI CON STESSO COLORE: ~p per il leader ~p~n", [SameColorLeaders, LeaderPid]),
+                                        
+                    % Crea un evento di cambio colore
+                    Color = maps:get(color, maps:get(LeaderPid, LeadersData)),
+                    Event = event:new(color, utils:normalize_color(Color), self()),
+
+                    io:format("SERVER : invio ~p ! {~p, ~p}~n",
+                        [LeaderPid , change_color_request, Event]
+                    ),
+                    
+                    % Invia un messaggio al leader selezionato
                     LeaderPid ! {change_color_request, Event}
             end
         end,
-        ClusterPairs
+        LeaderPids
     ),
+
+    io:format("SALVO~n"),
 
     % Salva la configurazione aggiornata
     JsonData = save_leader_configuration_json(UpdatedLeadersData),

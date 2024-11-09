@@ -16,9 +16,12 @@ import nbformat
 from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
 import time
 from IPython.display import Image
+import argparse
 
 # Path del notebook
 notebook_path = "history_log.ipynb"
+
+
 
 # Variabile per memorizzare l'hash dei leader data precedenti
 last_leader_data_hash = None
@@ -142,11 +145,6 @@ def get_node_color(pid, leaders_data):
             if node_pid == pid:
                 return leader_data["color"]
     return "grey"  # Default a grigio se il nodo non è trovato
-
-import sys
-
-# Controlla se il programma è avviato in modalità debug
-DEBUG_MODE = "--debug" in sys.argv
 
 def draw_matrix(output_path=IMG_PATH):
     
@@ -518,23 +516,21 @@ def home():
 # - Restituisce True se la comunicazione con Erlang è riuscita e ha confermato il cambio colore con "ok"
 # - Restituisce False se si verifica un errore di connessione o Erlang non conferma con "ok"
 def send_color_change_request(node_id, color):
-
     if node_id is None:
         print("Errore: node_id è None, impossibile inviare la richiesta")
         return False
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(('localhost', 8080))  # Assicurati che l'host e la porta siano corretti
-            message = f"change_color,{node_id},{color}"  # Usa node_id al posto di pid
-            print(f"Inviando il messaggio: {message}")  # Debug
+            s.connect(('localhost', PORT))  # Usa la variabile PORT passata dalla riga di comando
+            message = f"change_color,{node_id},{color}"
+            print(f"Inviando il messaggio: {message}")
             s.sendall(message.encode('utf-8'))
             response = s.recv(1024).decode('utf-8')
             return response == "ok"
     except Exception as e:
         print(f"Errore nella comunicazione con Erlang: {e}")
         return False
-
 
 # Endpoint HTTP per gestire il cambio colore di un nodo
 # Input:
@@ -557,7 +553,6 @@ def change_color():
         # Notifica i client WebSocket e aggiorna la visualizzazione
         socketio.emit('refresh')
         return redirect(url_for('home'))
-
     else:
         # Restituisce un messaggio di errore HTTP 500 in caso di problemi
         return "Errore nel cambio colore", 500
@@ -580,6 +575,17 @@ def clear_snapshots_folder(folder_path="static/default_test/snapshots"):
                 print(f"Errore durante l'eliminazione del file {file_path}: {e}")
     else:
         os.makedirs(folder_path)  # Crea la cartella se non esiste
+
+# Configura gli argomenti della riga di comando
+parser = argparse.ArgumentParser(description="Server per gestione della matrice e cambio colori")
+parser.add_argument('--port', type=int, default=8080, help="Porta su cui comunicare con il server Erlang")
+parser.add_argument('--debug', type=bool, default=False, help="Debug Mode")
+args = parser.parse_args()
+
+# Variabile porta basata sull'argomento della riga di comando
+PORT = args.port
+DEBUG_MODE = args.debug
+
 
 # Avvio del server
 if __name__ == "__main__":

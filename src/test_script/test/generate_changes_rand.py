@@ -8,6 +8,7 @@ import shutil
 from datetime import datetime, timedelta
 import random
 import time
+import argparse
 
 # Percorso della directory principale
 import sys
@@ -36,7 +37,7 @@ NODES_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "nodes_
 
 # Server Erlang
 HOST = 'localhost'
-PORT = 8080
+
 
 # Lista di colori disponibili per il test
 COLORS = ["red", "green", "blue", "yellow", "purple"]
@@ -109,7 +110,7 @@ def load_nodes_data():
         return []
 
 # Funzione per inviare una richiesta di cambio colore al server Erlang tramite TCP
-def send_color_change_request(pid, color, time):
+def send_color_change_request(pid, color, time, PORT):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((HOST, PORT))
@@ -126,7 +127,7 @@ def send_color_change_request(pid, color, time):
         return False
 
 # Funzione per eseguire operazioni multiple di cambio colore e kill
-def perform_multiple_operations(num_operazioni):
+def perform_multiple_operations(num_operazioni, PORT):
     nodes_data = load_nodes_data()
 
     for _ in range(num_operazioni):  # Esegue 10 operazioni casuali
@@ -145,7 +146,7 @@ def perform_multiple_operations(num_operazioni):
 
         timestamp = datetime.now() + variation
 
-        success = send_color_change_request(pid, color, timestamp)
+        success = send_color_change_request(pid, color, timestamp, PORT)
         if success:
             print(f"Colore cambiato per PID {pid} a {color} con timestamp {timestamp}")
         else:
@@ -156,24 +157,28 @@ def perform_multiple_operations(num_operazioni):
 
 # Funzione principale
 def main():
-    # Utilizza la funzione per liberare la porta 8080
-    if kill_process_on_port(8080):
-        print("Porta 8080 liberata con successo.")
-    else:
-        print("La porta 8080 era già libera o il processo non può essere terminato.")
+    # Configura i parametri da riga di comando
+    parser = argparse.ArgumentParser(description="Esegui cambi di colore e kill per nodi")
+    parser.add_argument('--rows', type=int, help="Numero di righe (N)")
+    parser.add_argument('--columns', type=int, help="Numero di colonne (M)")
+    parser.add_argument('--operations', type=int, help="Numero di operazioni da eseguire")
+    args = parser.parse_args()
+
+    # Usa gli argomenti se specificati, altrimenti chiedi input
+    N = args.rows if args.rows is not None else int(input("Inserisci il numero di righe (N): "))
+    M = args.columns if args.columns is not None else int(input("Inserisci il numero di colonne (M): "))
+    num_operazioni = args.operations if args.operations is not None else int(input("Inserisci quante operazioni vuoi fare: "))
 
     elimina_DB()
-
-    # Chiedi all'utente di inserire i valori di N e M
-    N = int(input("Inserisci il numero di righe (N): "))
-    M = int(input("Inserisci il numero di colonne (M): "))
-    num_operazioni = int(input("Inserisci quante operazioni vuoi fare: "))
 
     # Genera il file colors.txt
     generate_colors_file(N, M, True)
 
+    PORT = int(input("Quale porta utilizzo: "))
+
     # Esegui le operazioni una volta che l'utente conferma di aver avviato Erlang
-    perform_multiple_operations(num_operazioni)
+    perform_multiple_operations(num_operazioni, PORT)
+
 
 
 def kill_process_on_port(port):

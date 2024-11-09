@@ -27,7 +27,6 @@ NODES_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "nodes_
 
 # Server Erlang
 HOST = 'localhost'
-PORT = 8080
 
 # Lista di colori disponibili per il test
 COLORS = ["red", "green", "blue", "yellow", "purple"]
@@ -79,7 +78,6 @@ def generate_colors_file(N, M, random):
     print("\nE poi esegui su un altro terminale il seguente comando:\n")
     print("./start_visualizer.sh")
     
-    input("\nPremi Invio una volta completati i comandi nel terminale Erlang per continuare...")
 
 # Funzione per caricare i dati dei leader da un file JSON
 def load_leaders_data():
@@ -100,7 +98,7 @@ def load_nodes_data():
         return []
 
 # Funzione per inviare una richiesta di cambio colore al server Erlang tramite TCP
-def send_color_change_request(pid, color, timestamp):
+def send_color_change_request(pid, color, timestamp, PORT):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((HOST, PORT))
@@ -122,24 +120,9 @@ def get_pid_by_coordinates(data, x, y):
             return node["pid"]
 
     return None  # Se non trovato
-
-# Funzione per liberare la porta
-def kill_process_on_port(port):
-    for proc in psutil.process_iter(['pid', 'name']):
-        try:
-            for conn in proc.net_connections(kind='inet'):
-                if conn.laddr.port == port:
-                    print(f"Trovato processo '{proc.info['name']}' con PID {proc.info['pid']} sulla porta {port}. Terminando il processo.")
-                    proc.terminate()
-                    proc.wait(timeout=3)
-                    return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    print(f"Nessun processo trovato sulla porta {port}.")
-    return False
  
 
-def too_old():
+def too_old(PORT):
     nodes_data = load_nodes_data()
     
     time1 = datetime.now()
@@ -152,12 +135,12 @@ def too_old():
     for i in range(len(operations)):  # Esegue il numero totale di operazioni
         operation = operations[i]
         pid, color, t = operation
-        send_color_change_request(pid, color, t)
+        send_color_change_request(pid, color, t, PORT)
         # Pausa tra le operazioni
         time.sleep(1)
 
 # Funzione per eseguire operazioni multiple di cambio colore e kill
-def case1():
+def case1(PORT):
     nodes_data = load_nodes_data()
     
     time1 = datetime.now()
@@ -171,12 +154,12 @@ def case1():
     for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
         operation = operations[i]
         pid , color, t = operation
-        send_color_change_request(pid, color, t)
+        send_color_change_request(pid, color, t, PORT)
         # Pausa tra le operazioni
         time.sleep(4)
 
 # Funzione per eseguire operazioni multiple di cambio colore e kill
-def case2():
+def case2(PORT):
     nodes_data = load_nodes_data()
     
     time1 = datetime.now()
@@ -190,12 +173,12 @@ def case2():
     for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
         operation = operations[i]
         pid , color, t = operation
-        send_color_change_request(pid, color, t)
+        send_color_change_request(pid, color, t, PORT)
         # Pausa tra le operazioni
         time.sleep(4)
 
 # Funzione per eseguire operazioni multiple di cambio colore e kill
-def case3():
+def case3(PORT):
     nodes_data = load_nodes_data()
     
     time1 = datetime.now()
@@ -209,11 +192,11 @@ def case3():
     for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
         operation = operations[i]
         pid , color, t = operation
-        send_color_change_request(pid, color, t)
+        send_color_change_request(pid, color, t, PORT)
         # Pausa tra le operazioni
         time.sleep(1)
 
-def merge_successivo():
+def merge_successivo(PORT):
     nodes_data = load_nodes_data()
     
     operations =[
@@ -226,11 +209,11 @@ def merge_successivo():
     for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
         operation = operations[i]
         pid , color, t = operation
-        send_color_change_request(pid, color, t)
+        send_color_change_request(pid, color, t, PORT)
         # Pausa tra le operazioni
         time.sleep(0.5)
 
-def change_color_during_merge():
+def change_color_during_merge(PORT):
     nodes_data = load_nodes_data()
     
     operations =[
@@ -241,11 +224,11 @@ def change_color_during_merge():
     for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
         operation = operations[i]
         pid , color, t = operation
-        send_color_change_request(pid, color, t)
+        send_color_change_request(pid, color, t, PORT)
         # Pausa tra le operazioni
         time.sleep(0.5)    
 
-def doubleMerge():
+def doubleMerge(PORT):
     nodes_data = load_nodes_data()
     
     operations =[
@@ -256,7 +239,7 @@ def doubleMerge():
     for i in range(0, len(operations)):  # Esegue il numero totale di operazioni
         operation = operations[i]
         pid , color, t = operation
-        send_color_change_request(pid, color, t)
+        send_color_change_request(pid, color, t, PORT)
         # Pausa tra le operazioni
         time.sleep(0.1)   
 # DA FINIRE
@@ -280,15 +263,18 @@ def change_color_before_merge():
 
 def main():
     N, M = 5, 5  # Dimensioni della matrice
-    if kill_process_on_port(8080):
-        print("Porta 8080 liberata con successo.")
-    else:
-        print("La porta 8080 era già libera o il processo non può essere terminato.")
+    # if kill_process_on_port(PORT):
+    #     print("Porta 8080 liberata con successo.")
+    # else:
+    #     print("La porta 8080 era già libera o il processo non può essere terminato.")
 
     elimina_DB()
 
     # Genera il file colors.txt
     generate_colors_file(N, M, False)
+
+    # Chiede all'utente su quale porta inviare
+    PORT = int(input("Dimmi su che porta inviare: "))
 
     # Chiede all'utente quale funzione eseguire
     print("Scegli un'operazione da eseguire:")
@@ -304,19 +290,19 @@ def main():
     choice = input("Inserisci il numero dell'operazione desiderata: ")
 
     if choice == "1":
-        case1()
+        case1(PORT)
     elif choice == "2":
-        case2()
+        case2(PORT)
     elif choice == "3":
-        case3()
+        case3(PORT)
     elif choice == "4":
-        too_old()
+        too_old(PORT)
     elif choice == "5":
-        merge_successivo()
+        merge_successivo(PORT)
     elif choice == "6":
-        change_color_during_merge()
+        change_color_during_merge(PORT)
     elif choice == "7":
-        doubleMerge()
+        doubleMerge(PORT)
     else:
         print("Scelta non valida. Uscita dal programma.")
 
