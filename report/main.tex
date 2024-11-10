@@ -1,6 +1,7 @@
 \documentclass[12pt, a4paper]{report}
 
 \input{preamble}
+\usepackage[italian]{babel}
 
 \title{\Huge{Implementazione distribuita dell'algoritmo Flood-Fill}}
 \author{\Large{\textit{Tam Gabriele, Merlo Filippo}}}
@@ -907,5 +908,299 @@ Nell'ultima fase, vengono implementati i meccanismi per gestire i fallimenti dei
 \section{Conclusioni}
 
 La soluzione proposta, basata sul trattamento dei cluster come nodi in un grafo overlay e sull'uso di un database condiviso per la sincronizzazione, offre un equilibrio tra efficienza, scalabilit\`a e robustezza. I meccanismi di gestione della consistenza e dei fallimenti garantiscono il corretto funzionamento del sistema in ambienti distribuiti e soggetti a guasti.
+
+
+\newpage
+
+\chapter{Implementazione}
+
+\section{Scelta del linguaggio di programmazione}
+
+Per questo progetto distribuito sono stati utilizzati due linguaggi di programmazione principali: \textbf{Erlang} e \textbf{Python}. Ciascuno di essi è stato scelto per le sue caratteristiche specifiche, che permettono di risolvere efficacemente problemi di distribuzione e visualizzazione.
+
+\subsection{Erlang}
+
+\textbf{Erlang} è stato scelto per la logica distribuita e la gestione dei nodi nel sistema, grazie alla sua robustezza e al supporto nativo per la concorrenza e la tolleranza ai guasti. Erlang è particolarmente adatto per applicazioni distribuite e fault-tolerant, ed è ampiamente utilizzato in ambiti come le telecomunicazioni e i sistemi di backend ad alta disponibilità.
+
+\begin{itemize}
+    \item \textbf{Gestione dei processi}: in Erlang, ogni nodo e leader è gestito come un processo indipendente. Questo permette al sistema di scalare facilmente e di mantenere l'isolamento dei fallimenti tra i nodi.
+    \item \textbf{Pattern matching e concorrenza}: Erlang utilizza il pattern matching per la gestione dei messaggi e le strutture dati, facilitando la scrittura di codice conciso e mantenibile. La concorrenza è una funzionalità nativa del linguaggio, che permette ai processi di comunicare tramite messaggi in maniera asincrona.
+    \item \textbf{Semplicità e resilienza}: Erlang implementa una semplice struttura di error handling in cui, invece di cercare di prevenire ogni possibile errore, i processi possono fallire e riavviarsi autonomamente. Questo modello “let it crash” è efficace in sistemi distribuiti dove i singoli componenti devono rimanere resilienti.
+\end{itemize}
+
+Erlang è quindi stato impiegato per la creazione e gestione dei nodi, la comunicazione tra essi e per mantenere il server centrale che coordina i leader e gestisce la propagazione dei messaggi.
+
+\subsection{Python}
+
+\textbf{Python} è stato scelto per la visualizzazione dei dati e l’interfaccia utente. Con la libreria \texttt{Flask}, è stato possibile implementare un server web per mostrare la matrice dei nodi e permettere l'interazione dell'utente, mentre \texttt{Matplotlib} è stato utilizzato per la grafica della griglia.
+
+\begin{itemize}
+    \item \textbf{Visualizzazione e interfaccia web}: Python, con \texttt{Flask} e \texttt{Matplotlib}, permette di creare interfacce web e rappresentazioni grafiche dei nodi in modo rapido e flessibile.
+    \item \textbf{Aggiornamenti in tempo reale}: Il supporto di \texttt{Flask-SocketIO} consente la comunicazione in tempo reale tra il backend e l'interfaccia utente, permettendo di aggiornare la visualizzazione della griglia dei nodi ogni volta che avvengono modifiche nel sistema.
+    \item \textbf{Facilità d'integrazione con Erlang}: Python comunica con Erlang tramite un server TCP implementato in Erlang stesso. Questo approccio rende semplice l'integrazione e il passaggio di messaggi per operazioni come il cambio di colore dei nodi.
+\end{itemize}
+
+Python è quindi stato utilizzato come componente di frontend, fornendo una rappresentazione visiva intuitiva e permettendo l'interazione con i nodi per modificarne lo stato in tempo reale.
+
+\subsection{Benefici della combinazione di Erlang e Python}
+
+La combinazione di Erlang e Python ha permesso di sfruttare il meglio di entrambi i linguaggi:
+\begin{itemize}
+    \item \textbf{Distribuzione e resilienza} con Erlang per la gestione dei nodi e della logica di sistema.
+    \item \textbf{Visualizzazione intuitiva e interattiva} con Python per fornire un’interfaccia utente che permette di osservare lo stato del sistema e interagire con esso.
+\end{itemize}
+
+Questo approccio ha consentito di mantenere un sistema distribuito robusto e allo stesso tempo di offrire una visualizzazione efficace e flessibile.
+
+
+\section{Comandi principali per l'avvio del sistema}
+
+Di seguito sono riportati i comandi da utilizzare in una sessione Erlang per compilare i moduli e avviare il sistema distribuito, seguiti dai comandi per lanciare il visualizzatore Python.
+
+\begin{tcolorbox}[title=Comandi di Avvio in Erlang]
+\begin{verbatim}
+erl 
+c(node).
+c(event).
+c(utils).
+c(operation).
+c(setup).
+c(server).
+c(tcp_server).
+c(start_system).
+start_system:start(10,10,false).
+\end{verbatim}
+\end{tcolorbox}
+
+Questi comandi eseguono le seguenti operazioni:
+\begin{itemize}
+    \item \texttt{c(module).} compila il modulo specificato in Erlang.
+    \item \texttt{start\_system:start(10,10,false).} avvia il sistema con una griglia di nodi di dimensioni 10x10. Il terzo parametro indica se usare un file con una lista di colori o meno. Nel caso \texttt{false}, i colori vengono scelti randomicamente da una palette.
+\end{itemize}
+
+Per avviare la parte di visualizzazione in Python, che consente di'interagire con il sistema tramite un'interfaccia grafica, è necessario eseguire il seguente comando in un'altra sessione terminale:
+
+\begin{tcolorbox}[title=Avvio dell'interfaccia grafica in Python]
+\begin{verbatim}
+python3 grid_visualizer.py
+\end{verbatim}
+\end{tcolorbox}
+
+Questo comando esegue il file \texttt{grid\_visualizer.py}, che lancia un server Flask per la visualizzazione della griglia dei nodi e la gestione dell'interfaccia utente. Il server Python si connette al sistema Erlang tramite un'interfaccia TCP, permettendo la comunicazione tra i due ambienti e l'aggiornamento dinamico della visualizzazione. \`E inoltre possibile fornire come opzione \texttt{--debug} per avere dettagli maggiori riguardo i nodi nell'interfaccia.
+
+\section{Records}
+
+Le principali strutture dati utilizzate sono rappresentate dai record `node` e `leader`, che organizzano le informazioni di ciascun nodo e dei leader dei cluster. Questi record sono definiti in \texttt{node.erl} e permettono di gestire la posizione, i vicini e l'ID del leader per ciascun nodo.
+
+\subsection{Record \texttt{node.hrl}}
+
+Il record \texttt{node} rappresenta ciascun nodo del sistema. Contiene campi per le coordinate, il nodo parent, i figli, e lo stato di visita.
+
+\begin{tcolorbox}[title=Definizione del record \texttt{node}]
+\begin{verbatim}
+  -record(node, {pid, x, y, leaderID, neighbors = []}).
+\end{verbatim}
+\end{tcolorbox}
+
+\begin{itemize}
+    \item \textbf{pid}: identificatore del processo Erlang associato al nodo.
+    \item \textbf{x, y}: coordinate del nodo nella griglia.
+    \item \textbf{leaderID}: pid del leader del cluster a cui il nodo appartiene.
+    \item \textbf{neighbors}: lista dei pid dei nodi fisicamente adiacenti.
+\end{itemize}
+
+\subsection{Record \texttt{leader.hrl}}
+
+Il record \texttt{leader} rappresenta i leader dei cluster, gestendo l’aggregazione di nodi con lo stesso colore. Questo record incapsula il record nodo, facilitando il passaggio da nodo normale a leader e viceversa. Ogni leader contiene informazioni sia sul proprio cluster che di quelle dei cluster adiacenti.
+
+\begin{tcolorbox}[title=Definizione del record \texttt{leader}]
+\begin{verbatim}
+  -record(leader, {
+      node, color, last\_event, adj\_clusters = [], cluster\_nodes = []
+    }).
+\end{verbatim}
+\end{tcolorbox}
+
+\begin{itemize}
+    \item \textbf{node}: struttura dati del nodo leader.
+    \item \textbf{color}: colore del cluster.
+    \item \textbf{last\_event}: informazioni sull'ultima operazione eseguita sul cluster.
+    \item \textbf{adj\_clusters}: lista dei cluster adiacenti.
+    \item \textbf{cluster\_nodes}: lista dei pid dei nodi appartenenti al cluster.
+\end{itemize}
+
+\subsection{Record \texttt{event.hrl}}
+
+Il record \texttt{event} viene usato per date una struttura alle informazioni sulle operazioni che vengono eseguite sui cluster.
+
+\begin{tcolorbox}[title=Definizione del record \texttt{event}]
+\begin{verbatim}
+  -record(event, {timestamp, id, type, color, from}).
+\end{verbatim}
+\end{tcolorbox}
+
+\begin{itemize}
+    \item \textbf{timestamp}: tempo al momento della creazione di una nuova richiesta (operazione di cambio colore o merge).
+    \item \textbf{id}: identificatore univoco della richiesta. Essendo progressivi, nel caso di concorrenza (i.e. timestamp equivalente) viene usato per determinare l'ordine.
+    \item \textbf{type}: tipo di operazione (\texttt{color} o \texttt{merge}).
+    \item \textbf{color}: colore associato all'operazione.
+    \item \textbf{from}: leaderID del cluster in cui avver\`a l'operazione. Usato dal server per conoscere il richiedente dell'operazione.
+\end{itemize}
+
+\section{Moduli}
+\subsection{Modulo \texttt{node.erl}}
+
+Il modulo \texttt{node.erl} gestisce la creazione e gestione di ciascun nodo nel sistema. I nodi ricevono messaggi dal server e dai vicini per eseguire operazioni di propagazione, impostazione dei vicini, e cambio di colore. 
+
+\begin{tcolorbox}[title=Creazione di un nodo]
+\begin{verbatim}
+new_node(X, Y) -> #node{x = X, y = Y}.
+new_leader(X, Y, Color) -> #leader{node = new_node(X, Y), color = Color}.
+\end{verbatim}
+\end{tcolorbox}
+
+Le funzioni \texttt{new\_node} e \texttt{new\_leader} inizializzano rispettivamente un nodo e un leader con specifici parametri.
+
+\subsection{Modulo \texttt{event.erl}}
+
+Il modulo \texttt{event.erl} contiene funzioni ausiliarie per la creazione e gestione degli eventi. In particolare la funzione \texttt{new()}, crea un nuovo evento settando il field \texttt{timestamp} al tempo corrente e il field \texttt{id} con un identificativo unico e progressivo generato da Erlang stesso.
+
+\begin{tcolorbox}[title=Creazione di un nuovo evento]
+\begin{verbatim}
+new(Type, Color, LeaderID) ->
+    #event{
+        timestamp = erlang:time(),
+        id = erlang:unique_integer([monotonic]),
+        type = Type,
+        color = Color,
+        from = LeaderID
+    }.
+\end{verbatim}
+\end{tcolorbox}
+
+Come si pu\`o notare, per il tempo e l'id sono state utilizzate funzioni native di Erlang, evitando cos\`i la creazione di meccanismi ad-hoc meno performanti e pi\`u complessi.
+
+\subsection{Modulo \texttt{utils.erl}}
+
+Il modulo \texttt{utils.erl} contiene le definizioni di funzioni ausiliarie e comuni ai vari moduli del sistema tra cui operazioni di logging, manipolazione di liste e conversione di dati.
+
+\subsection{Modulo \texttt{operation.erl}}
+
+Il modulo \texttt{operation.erl} contiene la definizione delle operazioni di cambio colore e di merge, comprese le sotto-operazioni che vengono eseguite dai leader per completare tali operazioni. Sono state separate dal modulo node.erl per una maggiore chiarezza e modularità del codice.
+
+\subsection{Modulo \texttt{setup.erl}}
+
+Il modulo \texttt{setup.erl} viene richiamato dai moduli \texttt{start\_system.erl} e \texttt{node.erl} ed al suo interno sono state implementate le funzioni e i messaggi per la fase iniziale di setup del sistema, ovvero dalla scoperta dei vicini fisici, alla creazione dei cluster. Al termine dell'esecuzione del processo di setup, viene eseguito uno ``snapshot'' del sistema, ovvero vengono salvate le informazioni di ogni nodo in file .json separati, pi\`u viene salvata la struttura globale che viene inoltrata anche al server.
+
+\subsection{Modulo \texttt{server.erl}}
+
+Il server centrale, definito in \texttt{server.erl}, coordina il setup iniziale dei nodi e raccoglie le informazioni sui leader dei cluster. Ogni leader invia al server i dati dei propri nodi e dei cluster adiacenti, che vengono salvati in formato JSON per essere visualizzati esternamente.
+
+\begin{tcolorbox}[title=Funzione di Logging]
+\begin{verbatim}
+log_operation(Message) ->
+    {ok, File} = file:open("server_log.txt", [append]),
+    io:format(File, "~s~n", [Message]),
+    file:close(File),
+    io:format("LOG: ~s~n", [Message]).
+\end{verbatim}
+\end{tcolorbox}
+
+La funzione di logging registra ogni operazione eseguita dal server su un file di log per il monitoraggio.
+
+\subsection{Modulo \texttt{tcp\_server.erl}}
+
+Il modulo \texttt{tcp\_server.erl} gestisce la comunicazione TCP, permettendo l'interazione con il modulo di visualizzazione Python per il cambio di colore dei nodi. Quando riceve un messaggio con il formato "pid, colore", tenta di aggiornare il colore del nodo e restituisce un messaggio di conferma.
+
+\begin{tcolorbox}[title=Comunicazione TCP]
+\begin{verbatim}
+loop(Socket) ->
+    case gen_tcp:recv(Socket, 0) of
+        {ok, BinData} ->
+            [PidStr, Color] = string:split(binary_to_list(BinData), 
+                ",", all),
+            Pid = list_to_pid(PidStr),
+            gen_tcp:send(Socket, "ok");
+        {error, _} -> gen_tcp:close(Socket)
+\end{verbatim}
+\end{tcolorbox}
+
+\subsection{Modulo \texttt{start\_system.erl}}
+
+Il seguente \`e il modulo principale del sistema, che si occupa di spawnare i processi necessari nel corretto ordine ed avviare tutte le componenti del sistema.
+
+\section{Scripts}
+
+\subsection{Script \texttt{grid\_visualizer.py}}
+
+Lo script Python \texttt{grid\_visualizer.py} implementa una visualizzazione grafica della griglia di nodi e cluster. Utilizza Flask e Matplotlib per generare un’interfaccia web, e supporta aggiornamenti in tempo reale grazie a WebSocket tramite Flask-SocketIO.
+
+\begin{tcolorbox}[title=Visualizzazione della Matrice]
+\begin{verbatim}
+def draw_matrix():
+    leaders_data = load_leaders_data()
+    nodes_data = load_nodes_data()
+    
+    fig = Figure(figsize=(8, 8))
+    ax = fig.add_subplot(111)
+    
+    for node in nodes_data:
+        x, y, pid = node["x"], node["y"], node["pid"]
+        color = get_node_color(pid, leaders_data)
+        rgb = color_to_rgb(color)
+        ax.add_patch(Rectangle((y - 1, max_x - x), 1, 1, 
+            color=rgb, ec="black"))
+\end{verbatim}
+\end{tcolorbox}
+
+\section{File di backup e logging}
+
+Nel sistema distribuito progettato, vengono generati e utilizzati diversi file per mantenere memorizzati localmente i dati del sistema, nello specifico sia i dati di ogni nodo (JSON) che lo storico delle operazioni (log). Di seguito viene fornita una descrizione dettagliata di ciascun file:
+
+\begin{itemize}
+    \item \texttt{nodes\_data.json} \\
+    Questo file contiene le informazioni sui nodi creati durante l'inizializzazione del sistema. Ogni nodo è rappresentato da una struttura JSON che include:
+    \begin{itemize}
+        \item \texttt{pid}: ID del processo Erlang che rappresenta il nodo.
+        \item \texttt{x}: coordinata orizzontale del nodo nella griglia.
+        \item \texttt{y}: coordinata verticale del nodo nella griglia.
+    \end{itemize}
+    Questo file è utile per tenere traccia della disposizione dei nodi e delle loro proprietà di base.
+
+    \item \texttt{leaders\_data.json} \\
+    Questo file memorizza i dati di ciascun leader, comprese le informazioni sui cluster a cui sono associati. Ogni leader è rappresentato da una struttura JSON che include:
+    \begin{itemize}
+        \item \texttt{color}: il colore assegnato al leader, che identifica il cluster.
+        \item \texttt{adjacent\_clusters}: una lista di cluster adiacenti, rappresentata da tuple \texttt{\{pid, color\}}, dove \texttt{pid} \`e l'ID del leader del cluster adiacente e \texttt{color} \`e il colore associato a quel cluster.
+        \item \texttt{nodes}: una lista d'ID di processo dei nodi che appartengono al cluster del leader.
+    \end{itemize}
+    Questo file viene utilizzato durante la fase di visualizzazione per evidenziare la struttura dei cluster e le loro relazioni.
+
+    \item \texttt{server\_log.txt} \\
+    Questo file contiene un log di tutte le operazioni effettuate dal server durante l'esecuzione del sistema. Ogni operazione è registrata con un timestamp, insieme a un messaggio descrittivo. Le operazioni tipiche includono:
+    \begin{itemize}
+        \item Ricezione e gestione di richieste dai nodi.
+        \item Completamento della configurazione di un nodo o leader.
+        \item Avvio delle diverse fasi del sistema (ad esempio, Fase 1 e Fase 2).
+    \end{itemize}
+    Questo log è utile per il debug e per tracciare lo stato del sistema nel tempo.
+
+    \item \texttt{nodes\_status.txt} \\
+    Questo file tiene traccia dello stato di ciascun nodo durante l'esecuzione. Ogni riga rappresenta un nodo e contiene informazioni come:
+    \begin{itemize}
+        \item \texttt{x}, \texttt{y}: le coordinate del nodo.
+        \item \texttt{color}: il colore corrente del nodo.
+        \item \texttt{leaderID}: l'ID del leader del cluster a cui appartiene.
+    \end{itemize}
+    Questo file è monitorato dal modulo di visualizzazione per aggiornare in tempo reale la rappresentazione grafica della griglia, riflettendo cambiamenti di stato come il colore o la posizione di un nodo.
+
+    \item \texttt{leaders\_data.json} (output finale della Fase 2) \\
+    Al completamento della Fase 2, i dati finali dei leader vengono memorizzati in questo file in formato JSON. Include informazioni consolidate su tutti i leader e sui cluster adiacenti, utili per la rappresentazione della struttura del sistema una volta che l'inizializzazione è completa.
+
+    \item \texttt{static/matrix.png} \\
+    Questo file contiene l'immagine della griglia dei nodi, generata dal modulo Python \texttt{grid\_visualizer.py}. La visualizzazione rappresenta la griglia con i nodi colorati e le connessioni tra i cluster, permettendo all'utente di vedere l'organizzazione del sistema e di monitorare cambiamenti dinamici. Ogni volta che i dati dei leader o dei nodi vengono modificati, l'immagine viene aggiornata e salvata in questo file.
+\end{itemize}
+
+Questi file forniscono le informazioni essenziali per il monitoraggio e la gestione del sistema distribuito, mantenendo un log dettagliato delle operazioni e fornendo dati strutturati per la visualizzazione e l'analisi.
 
 \end{document}
