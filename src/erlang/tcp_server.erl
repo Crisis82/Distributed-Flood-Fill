@@ -5,7 +5,7 @@
 
 % Funzione di avvio del server TCP
 start() ->
-    spawn(fun() -> 
+    spawn(fun() ->
         {ok, ListenSocket} = gen_tcp:listen(0, [binary, {packet, 0}, {active, false}]),
         {ok, Port} = inet:port(ListenSocket),
         io:format("Server in ascolto su porta ~p~n", [Port]),
@@ -50,14 +50,12 @@ handle_message(["change_color", IdStr, ColorStr, HH_str, MM_str, SS_str], Socket
             % io:format("Errore: colore non valido ~p~n", [ColorStr]),
             gen_tcp:send(Socket, "error")
     end;
-
-
 handle_message(["kill", IdStr, HH_str, MM_str, SS_str], Socket) ->
     % io:format("Ricevuto comando di kill per ID: ~p~n", [IdStr]),
     case convert_to_pid(IdStr) of
         {ok, Pid} ->
             Timestamp = parse_time(HH_str, MM_str, SS_str),
-            Event = event:new_with_timestamp(kill, undefined, Pid, Timestamp),
+            _Event = event:new_with_timestamp(kill, undefined, Pid, Timestamp),
             % io:format("TCP_SERVER : Invio messaggio {kill, ~p} a ~p~n", [Pid, Event]),
             Pid ! {kill},
             gen_tcp:send(Socket, "ok");
@@ -65,7 +63,6 @@ handle_message(["kill", IdStr, HH_str, MM_str, SS_str], Socket) ->
             % io:format("Errore: formato PID non valido ~p~n", [IdStr]),
             gen_tcp:send(Socket, "error")
     end;
-
 handle_message(_InvalidMessage, Socket) ->
     % io:format("Errore: messaggio non riconosciuto~n"),
     gen_tcp:send(Socket, "error").

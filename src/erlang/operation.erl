@@ -13,7 +13,7 @@
     update_adjacent_cluster_info/3
 ]).
 % recovery utils
--export([promote_to_leader/5]).
+-export([promote_to_leader/4]).
 
 -include("includes/node.hrl").
 -include("includes/event.hrl").
@@ -37,30 +37,30 @@ change_color(Leader, Event) ->
 
     % Converte il colore in atomo se non lo è già
     ColorAtom = utils:normalize_color(Color),
-    
-    %% Aggiorna il colore e l'ultima operazione sul cluster
+
+    % Aggiorna il colore e l'ultima operazione sul cluster
     UpdatedLeader1 = Leader#leader{color = ColorAtom, last_event = Event},
-    
 
     % Ottieni il LeaderID corrente
     CurrentLeaderID = Leader#leader.node#node.leaderID,
 
     % Raccoglie i cluster adiacenti con lo stesso colore ma con LeaderID diverso dal corrente
     SameColorAdjClusters = utils:unique_leader_clusters(
-        [{NeighborPid, NeighborColor, LeaderID}
-        || {NeighborPid, NeighborColor, LeaderID} <- Leader#leader.adjClusters,
+        [
+            {NeighborPid, NeighborColor, LeaderID}
+         || {NeighborPid, NeighborColor, LeaderID} <- Leader#leader.adj_clusters,
             NeighborColor == ColorAtom,
-            LeaderID =/= CurrentLeaderID]  % Filtra quelli con lo stesso LeaderID
+            % Filtra quelli con lo stesso LeaderID
+            LeaderID =/= CurrentLeaderID
+        ]
     ),
 
     io:format("~p : Gli adjacents clusters sono ~p, quelli con il colore ~p sono: ~p.~n", [
-        self(), Leader#leader.adjClusters, ColorAtom, SameColorAdjClusters
+        self(), Leader#leader.adj_clusters, ColorAtom, SameColorAdjClusters
     ]),
-
 
     % Estrai i LeaderID dai cluster con lo stesso colore
     LeaderIDs = [LeaderID || {_, _, LeaderID} <- SameColorAdjClusters],
-
 
     UpdatedLeader =
         case SameColorAdjClusters of
@@ -74,8 +74,11 @@ change_color(Leader, Event) ->
                 %     "Vicini con lo stesso colore trovati. Avvio processo di merge sequenziale.~n"
                 % ),
                 % Avvia il merge sequenziale per ogni cluster con lo stesso colore
-                io:format("LeaderIDs : ~p~n",[LeaderIDs]),
-                UpdatedLeader2 = merge_adjacent_clusters(SameColorAdjClusters, UpdatedLeader1, LeaderIDs, Event),
+
+                io:format("LeaderIDs : ~p~n", [LeaderIDs]),
+                UpdatedLeader2 = merge_adjacent_clusters(
+                    SameColorAdjClusters, UpdatedLeader1, LeaderIDs, Event
+                ),
                 % io:format(
                 %     "Leader dopo tutti i merge: ~p.~n",  [UpdatedLeader2]
                 % ),
@@ -83,23 +86,23 @@ change_color(Leader, Event) ->
         end,
 
     % io:format("~p : Devo inviare la mia nuova configurazione (color_adj_update) a tutti i leader dei cluster vicini: ~p.~n", [
-    %     self(), UpdatedLeader#leader.adjClusters
+    %     self(), UpdatedLeader#leader.adj_clusters
     % ]),
 
     % Invia color_adj_update a ciascun cluster adiacente aggiornato
     lists:foreach(
         fun({_PID, _NeighborColor, OtherLeaderID}) ->
             % io:format("Inviando {color_adj_update, ~p, ~p, ~p} a ~p.~n", [self(), UpdatedLeader#leader.color,
-            %         UpdatedLeader#leader.nodes_in_cluster, OtherLeaderID]),
+            %         UpdatedLeader#leader.cluster_nodes, OtherLeaderID]),
             OtherLeaderID !
                 {color_adj_update, self(), UpdatedLeader#leader.color,
-                    UpdatedLeader#leader.nodes_in_cluster}
+                    UpdatedLeader#leader.cluster_nodes}
         end,
-        UpdatedLeader#leader.adjClusters
+        UpdatedLeader#leader.adj_clusters
     ),
 
     % Comunica al server la fine del color change
-    UpdatedLeader#leader.serverID ! {change_color_complete, self(), UpdatedLeader},
+    server ! {change_color_complete, self(), UpdatedLeader},
 
     % utils:log_operation(Event),
 
@@ -112,8 +115,6 @@ change_color(Leader, Event) ->
 %%
 %% ------------------
 
-
-
 %% ------------------
 %%
 %%    MERGE UTILS
@@ -123,65 +124,86 @@ change_color(Leader, Event) ->
 merge_adjacent_clusters([], Leader, _LeaderIDs, _Event) ->
     % Nessun altro cluster da gestire, restituisce il leader aggiornato
     Leader;
-
-merge_adjacent_clusters([{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, LeaderIDs, Event) ->
+merge_adjacent_clusters(
+    [{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, LeaderIDs, Event
+) ->
     % Invia la richiesta di merge al leader adiacente
     AdjLeaderID ! {merge_request, self(), Event},
     receive
-        {response_to_merge, Nodes_in_Cluster, AdjListIDMaggiore, FromPid} when FromPid == AdjLeaderID ->
-            io:format("~p : HO RICEVUTO response_to_merge da ~p, DENTRO merge_adjacent_clusters~n", [self(), FromPid]),
-            UpdatedAdjClusters = utils:join_adj_clusters(Leader#leader.adjClusters, AdjListIDMaggiore),
+        {response_to_merge, ClusterNodes, AdjListIDMaggiore, FromPid} when
+            FromPid == AdjLeaderID
+        ->
+            io:format(
+                "~p : HO RICEVUTO response_to_merge da ~p, DENTRO merge_adjacent_clusters~n", [
+                    self(), FromPid
+                ]
+            ),
+            % Unisce i cluster adiacenti e rimuove eventuali duplicati
+            UpdatedAdjClusters = utils:join_adj_clusters(
+                Leader#leader.adj_clusters, AdjListIDMaggiore
+            ),
+
+            % Rimuove se stesso e l'altro leader dalla lista dei cluster adiacenti
             FilteredAdjClusters = lists:filter(
                 fun({_, _, LeaderID}) ->
                     not lists:member(LeaderID, LeaderIDs) andalso
-                    LeaderID =/= Leader#leader.node#node.leaderID andalso
-                    LeaderID =/= AdjLeaderID
+                        LeaderID =/= Leader#leader.node#node.leaderID andalso
+                        LeaderID =/= AdjLeaderID
                 end,
                 UpdatedAdjClusters
             ),
-            UpdatedNodeList = utils:join_nodes_list(Leader#leader.nodes_in_cluster, Nodes_in_Cluster),
+
+            % Unisce le liste dei nodi nel cluster
+            UpdatedNodeList = utils:join_nodes_list(Leader#leader.cluster_nodes, ClusterNodes),
+
+            % Crea il nuovo leader aggiornato
             UpdatedLeader = Leader#leader{
-                adjClusters = FilteredAdjClusters,
-                nodes_in_cluster = UpdatedNodeList
+                adj_clusters = FilteredAdjClusters,
+                cluster_nodes = UpdatedNodeList
             },
-            io:format("~p : HO GESTITO response_to_merge di ~p, DENTRO merge_adjacent_clusters~n", [self(), FromPid]),
-            
+            io:format(
+                "~p : HO GESTITO response_to_merge di ~p, DENTRO merge_adjacent_clusters~n", [
+                    self(), FromPid
+                ]
+            ),
+
             FromPid ! {became_node, self()},
             receive
-                {turned_to_node, FromPid} ->
+                {turned_to_node, _FromPid2} ->
                     merge_adjacent_clusters(Rest, UpdatedLeader, LeaderIDs, Event);
                 % Clausola per reinserire solo i messaggi color_adj_update
-                {color_adj_update, Color, FromPid, AdjLeaderID} ->
-                    self() ! {color_adj_update, Color, FromPid, AdjLeaderID},
+                {color_adj_update, Color, FromPid2, AdjLeaderID2} ->
+                    self() ! {color_adj_update, Color, FromPid2, AdjLeaderID2},
                     merge_adjacent_clusters(Rest, UpdatedLeader, LeaderIDs, Event)
-            after 4000 -> % Timeout di 2 secondi per la risposta turned_to_node
-                io:format("~p : Timeout in attesa di turned_to_node da ~p, passo al successivo.~n", [self(), FromPid]),
+                % Timeout di 2 secondi per la risposta turned_to_node
+            after 4000 ->
+                io:format(
+                    "~p : Timeout in attesa di turned_to_node da ~p, passo al successivo.~n", [
+                        self(), FromPid
+                    ]
+                ),
                 merge_adjacent_clusters(Rest, Leader, LeaderIDs, Event)
             end;
-
         {merge_rejected, FromPid} when FromPid == AdjLeaderID ->
             io:format("~p : Messaggio ricevuto: {~p,~p}.~n", [self(), merge_rejected, FromPid]),
             merge_adjacent_clusters(Rest, Leader, LeaderIDs, Event);
-
         % Clausola per reinserire solo i messaggi color_adj_update
-        {color_adj_update, Color, FromPid, AdjLeaderID} ->
-            self() ! {color_adj_update, Color, FromPid, AdjLeaderID},
-            merge_adjacent_clusters([{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, LeaderIDs, Event)
-        
+        {color_adj_update, Color, FromPid, AdjLeaderID2} ->
+            self() ! {color_adj_update, Color, FromPid, AdjLeaderID2},
+            merge_adjacent_clusters(
+                [{_NeighborPid, _NeighborColor, AdjLeaderID} | Rest], Leader, LeaderIDs, Event
+            )
     after 5000 ->
         merge_adjacent_clusters(Rest, Leader, LeaderIDs, Event)
     end.
 
-
-
-
-update_adj_cluster_color(AdjClusters, NodesInCluster, NewColor, NewLeaderID) ->
+update_adj_cluster_color(AdjClusters, ClusterNodes, NewColor, NewLeaderID) ->
     lists:foldl(
         fun(NodeID, UpdatedAdjClusters) ->
             update_existing_node(UpdatedAdjClusters, NodeID, NewColor, NewLeaderID)
         end,
         AdjClusters,
-        NodesInCluster
+        ClusterNodes
     ).
 
 update_existing_node([], _NodeID, _NewColor, _NewLeaderID) ->
@@ -215,9 +237,6 @@ update_adjacent_cluster_info(NewLeaderPid, UpdatedClusterInfo, AdjacentClusters)
     NewEntry = {NewLeaderPid, NewColor, NewLeaderID},
     [NewEntry | AdjClustersWithoutOld].
 
-
-
-
 %% ------------------
 %%
 %%  RECOVERY UTILS
@@ -225,17 +244,16 @@ update_adjacent_cluster_info(NewLeaderPid, UpdatedClusterInfo, AdjacentClusters)
 %% ------------------
 
 %% Funzione per promuovere un nodo a leader utilizzando le informazioni ricevute.
-promote_to_leader(Node, Color, ServerPid, NodesInCluster, AdjacentClusters) ->
+promote_to_leader(Node, Color, ClusterNodes, AdjacentClusters) ->
     %% Costruisci il record leader partendo dal nodo esistente e aggiungi le informazioni specifiche del leader.
     Leader = #leader{
         %% Imposta il PID del nodo come leaderID
         node = Node#node{leaderID = Node#node.pid},
         color = Color,
-        serverID = ServerPid,
         %% Inizializza l'ultimo evento, se necessario
         last_event = event:new(),
-        adjClusters = AdjacentClusters,
-        nodes_in_cluster = NodesInCluster
+        adj_clusters = AdjacentClusters,
+        cluster_nodes = ClusterNodes
     },
 
     %% Log di conferma della promozione del nodo a leader

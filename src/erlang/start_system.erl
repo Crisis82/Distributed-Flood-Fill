@@ -5,15 +5,15 @@
 
 -define(palette, [red, green, blue, yellow, orange, purple, pink, brown, black, white]).
 
-
 %% Funzione per caricare i colori da un file
 %% Output: Lista dei colori in ordine per riga
 load_colors_from_file(Filename) ->
     case file:read_file(Filename) of
         {ok, BinaryData} ->
             Lines = binary:split(BinaryData, <<"\n">>, [global]),
-            [binary_to_atom(Line, utf8) || Line <- Lines, Line =/= <<>>]; % Convert each color to an atom
-        {error, Reason} ->
+            % Convert each color to an atom
+            [binary_to_atom(Line, utf8) || Line <- Lines, Line =/= <<>>];
+        {error, _Reason} ->
             % io:format("Errore durante la lettura del file: ~p~n", [Reason]),
             []
     end.
@@ -23,55 +23,53 @@ load_colors_from_file(Filename) ->
 %% - N: numero di righe della matrice dei nodi
 %% - M: numero di colonne della matrice dei nodi
 start(N, M, FromFile) ->
+    register(start, self()),
     %% Avvio del server
     % io:format("Sono start_system e avvio server.~n"),
-    ServerPid = server:start_server(self()),
+    server:start_server(),
     % io:format("Sono start_system e ho concluso l'avvio del server.~n"),
 
     %% Creazione dei nodi nella griglia NxM
     % io:format("Sono start_system e inizio a creare nodi.~n"),
 
-    Nodes = case FromFile of
-    true ->
-        Colors = load_colors_from_file("../config/colors.txt"),
-        if
-            Colors =:= [] ->
-                % io:format("Errore: il file dei colori è vuoto o non contiene abbastanza colori.~n"),
-                exit(file_error);
-            length(Colors) < N * M ->
-                % io:format("Errore: il file dei colori non contiene abbastanza colori per la matrice richiesta: ~p~n", [length(Colors)]),
-                exit(insufficient_colors);
+    Nodes =
+        case FromFile of
             true ->
+                Colors = load_colors_from_file("../config/colors.txt"),
+                if
+                    Colors =:= [] ->
+                        % io:format("Errore: il file dei colori è vuoto o non contiene abbastanza colori.~n"),
+                        exit(file_error);
+                    length(Colors) < N * M ->
+                        % io:format("Errore: il file dei colori non contiene abbastanza colori per la matrice richiesta: ~p~n", [length(Colors)]),
+                        exit(insufficient_colors);
+                    true ->
+                        [
+                            node:new_leader(
+                                X, Y, lists:nth((Y - 1) * M + X, Colors)
+                            )
+                         || X <- lists:seq(1, N), Y <- lists:seq(1, M)
+                        ]
+                end;
+            false ->
+                L = length(?palette),
                 [
-                    node:new_leader(X, Y, lists:nth((Y - 1) * M + X, Colors), ServerPid, self())
-                    || X <- lists:seq(1, N), Y <- lists:seq(1, M)
+                    node:new_leader(X, Y, lists:nth(rand:uniform(L), ?palette))
+                 || X <- lists:seq(1, N), Y <- lists:seq(1, M)
                 ]
-        end;
-        false ->
-            L = length(?palette),
-            [
-                node:new_leader(X, Y, lists:nth(rand:uniform(L), ?palette), ServerPid, self())
-                || X <- lists:seq(1, N), Y <- lists:seq(1, M)
-            ]
-    end,
-
-
-
+        end,
 
     %% Stampa delle informazioni dei nodi creati
     % io:format("I seguenti nodi sono stati creati:.~n"),
     % lists:foreach(
-    %     fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
-            % io:format("Node Information:~n"),
-            % io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
-            % io:format("  Parent: ~p~n", [Node#node.parent]),
-            % io:format("  Children: ~p~n", [Node#node.children]),
-            % io:format("  Time: ~p~n", [Node#node.time]),
-            % io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
-            % io:format("  PID: ~p~n", [Node#node.pid]),
-            % io:format("  Color: ~p~n", [Color]),
-            % io:format("  Server ID: ~p~n", [ServerID]),
-            % io:format("  Adjacent Clusters: ~p~n~n", [AdjClusters])
+    %     fun(#leader{node = Node, color = Color, adj_clusters = AdjClusters, cluster_nodes = ClusterNodes}) ->
+    % io:format("Node Information:~n"),
+    % io:format("  PID: ~p~n", [Node#node.pid]),
+    % io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
+    % io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
+    % io:format("  Color: ~p~n", [Color]),
+    % io:format("  Adjacent Clusters: ~p~n~n", [AdjClusters])
+    % io:format("  Cluster Nodes: ~p~n~n", [ClusterNodes])
     %     end,
     %     Nodes
     % ),
@@ -98,7 +96,7 @@ start(N, M, FromFile) ->
             %% Invia i vicini al processo nodo
             % io:format("Sono il start_system ~p e invio a PID: ~p il messaggio: {neighbors, ~p}~n", [self(), Pid, Neighbors]),
             Pid ! {neighbors, Neighbors},
- 
+
             %% Restituisce il Leader aggiornato
             UpdatedLeader
         end,
@@ -121,34 +119,27 @@ start(N, M, FromFile) ->
     %% Stampa delle informazioni dei nodi creati
     % io:format("I seguenti nodi sono stati creati:.~n"),
     % lists:foreach(
-    %     fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
-            % io:format("Node Information:~n"),
-            % io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
-            % io:format("  Parent: ~p~n", [Node#node.parent]),
-            % io:format("  Children: ~p~n", [Node#node.children]),
-            % io:format("  Time: ~p~n", [Node#node.time]),
-            % io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
-            % io:format("  PID: ~p~n", [Node#node.pid]),
-            % io:format("  Color: ~p~n", [Color]),
-            % io:format("  Server ID: ~p~n", [ServerID]),
-            % io:format("  Adjacent Clusters: ~p~n~n", [AdjClusters])
+    %     fun(#leader{node = Node, color = Color, adj_clusters = AdjClusters, cluster_nodes = ClusterNodes}) ->
+    % io:format("Node Information:~n"),
+    % io:format("  PID: ~p~n", [Node#node.pid]),
+    % io:format("  Coordinates: (~p, ~p)~n", [Node#node.x, Node#node.y]),
+    % io:format("  Leader ID: ~p~n", [Node#node.leaderID]),
+    % io:format("  Color: ~p~n", [Color]),
+    % io:format("  Adjacent Clusters: ~p~n", [AdjClusters]),
+    % io:format("  Cluster Nodes: ~p~n~n", [ClusterNodes])
     %     end,
     %     UpdatedNodes
     % ),
 
     % Invia i nodi al server per completare il setup
     % io:format("Invio messaggio {start_setup, ~p, ~p} a ~p.~n", [UpdatedNodes, self(), ServerPid]),
-    ServerPid ! {start_setup, UpdatedNodes, self()},
+    server ! {start_setup, UpdatedNodes},
 
     % Avvia il server TCP per la visualizzazione
     receive
         {finih_setup, _LeaderIDs} ->
             % io:format("Avvio il tcp_server per visualizzare i nodi.~n"),
             tcp_server:start()
-            %% Sincronizzazione dei nodi con il time_server
-            %  % io:format("Sono start_system ed avvio il sync fra time-server e nodi.~n"),
-            % time_server:start(UpdatedNodes)
-        % % io:format("FINITO, ora inizio a fare cose belle.~n"),
         % simulation:start(LeaderIDs, "failure")
     end.
 
@@ -160,19 +151,20 @@ start(N, M, FromFile) ->
 save_nodes_data(Nodes) ->
     % Converte ciascun nodo in stringa JSON con tutti i campi
     JsonNodes = lists:map(
-        fun(#leader{node = Node, color = Color, serverID = ServerID, adjClusters = AdjClusters}) ->
+        fun(
+            #leader{
+                node = Node, color = Color, adj_clusters = AdjClusters, cluster_nodes = ClusterNodes
+            }
+        ) ->
             node_to_json(
+                Node#node.pid,
                 Node#node.x,
                 Node#node.y,
-                Node#node.parent,
-                Node#node.children,
-                Node#node.time,
                 Node#node.leaderID,
-                Node#node.pid,
                 Node#node.neighbors,
                 Color,
-                ServerID,
-                AdjClusters
+                AdjClusters,
+                ClusterNodes
             )
         end,
         Nodes
@@ -187,33 +179,27 @@ save_nodes_data(Nodes) ->
 %% - Parametri dei campi del nodo
 %% Output:
 %% - Restituisce una stringa JSON che rappresenta il nodo completo
-node_to_json(X, Y, Parent, Children, Time, LeaderID, Pid, Neighbors, Color, ServerID, AdjClusters) ->
+node_to_json(Pid, X, Y, LeaderID, Neighbors, Color, AdjClusters, ClusterNodes) ->
+    PidStr = pid_to_string(Pid),
     XStr = integer_to_list(X),
     YStr = integer_to_list(Y),
-    ParentStr = pid_to_string(Parent),
-    ChildrenStr = lists:map(fun pid_to_string/1, Children),
-    TimeStr = io_lib:format("~p", [Time]),
     LeaderIDStr = pid_to_string(LeaderID),
-    PidStr = pid_to_string(Pid),
     NeighborsStr = lists:map(fun pid_to_string/1, Neighbors),
-    ColorStr = atom_to_list(Color),
-    ServerIDStr = pid_to_string(ServerID),
+    ColorStr = utils:atom_to_string(Color),
     AdjClustersStr = lists:map(fun pid_to_string/1, AdjClusters),
+    ClusterNodesStr = lists:map(fun pid_to_string/1, ClusterNodes),
 
     io_lib:format(
-        "{\"x\": ~s, \"y\": ~s, \"parent\": \"~s\", \"children\": ~s, \"time\": \"~s\", \"leaderID\": \"~s\", \"pid\": \"~s\", \"neighbors\": ~s, \"color\": \"~s\", \"serverID\": \"~s\", \"adjClusters\": ~s}",
+        "{\"pid\": \"~s\", \"x\": ~s, \"y\": ~s, \"leaderID\": \"~s\", \"neighbors\": \"~s\", \"color\": \"~s\", \"adj_clusters\": \"~s\", \"cluster_nodes\": \"~s\"}",
         [
+            PidStr,
             XStr,
             YStr,
-            ParentStr,
-            io_lib:format("~p", [ChildrenStr]),
-            TimeStr,
             LeaderIDStr,
-            PidStr,
             io_lib:format("~p", [NeighborsStr]),
             ColorStr,
-            ServerIDStr,
-            io_lib:format("~p", [AdjClustersStr])
+            io_lib:format("~p", [AdjClustersStr]),
+            io_lib:format("~p", [ClusterNodesStr])
         ]
     ).
 
@@ -231,7 +217,7 @@ ack_loop(_, 0) ->
     io:format("Tutti gli ACK sono stati ricevuti.~n~n~n");
 ack_loop(Nodes, RemainingACKs) ->
     receive
-        {ack_neighbors, Pid} ->
+        {ack_neighbors, _Pid} ->
             % Log dell'ACK ricevuto dal nodo specificato
             % io:format("Ricevuto ACK dal nodo con PID: ~p~n", [Pid]),
             % Continua ad attendere finché non riceve tutti gli ACK richiesti
@@ -257,7 +243,7 @@ find_neighbors(X, Y, Nodes, N, M) ->
         Y + DY =< M
     ],
 
-    %% Trova i PID dei nodi vicini in base alle coordinate
+    % Trova i PID dei nodi vicini in base alle coordinate
     [
         NeighborNode#node.pid
      || #leader{node = NeighborNode} <- Nodes,

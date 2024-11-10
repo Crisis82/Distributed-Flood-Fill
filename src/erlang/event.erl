@@ -22,13 +22,11 @@ new_with_timestamp(Type, Color, LeaderID, Timestamp) ->
         from = LeaderID
     }.
 
-
 greater(T1, T2) ->
     if
-        T1#event.timestamp > T2#event.timestamp ->
-            false;
+        % If timestamps are equal (concurrent operation), check priority by id
         T1#event.timestamp =:= T2#event.timestamp ->
-            T2#event.id > T1#event.id;
+            T1#event.id > T2#event.id;
         true ->
-            true
+            T1#event.timestamp > T2#event.timestamp
     end.

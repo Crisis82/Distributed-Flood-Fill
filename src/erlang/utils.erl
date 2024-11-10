@@ -26,7 +26,10 @@
 ]).
 % logging
 -export([
-    log_operation/1
+    log_operation/1,
+    reference/2,
+    get_reference/1,
+    coordinate_to_reference/2
 ]).
 % data backup
 -export([
@@ -50,7 +53,7 @@ remove_duplicates(List) ->
 unique_leader_clusters(Clusters) ->
     % Usa una mappa per tenere solo un cluster per LeaderID
     ClusterMap = maps:from_list(
-         lists:map(fun({Pid, Color, LeaderID}) -> {LeaderID, {Pid, Color, LeaderID}} end, Clusters)
+        lists:map(fun({Pid, Color, LeaderID}) -> {LeaderID, {Pid, Color, LeaderID}} end, Clusters)
     ),
     maps:values(ClusterMap).
 
@@ -130,42 +133,31 @@ atom_to_string(Other) -> Other.
 save_leader_data_to_file(Leader) ->
     Node = Leader#leader.node,
 
-    % Ottieni le coordinate X e Y per costruire il nome del file
-    X = Node#node.x,
-    Y = Node#node.y,
-    Dir = io_lib:format("../DB/~p_~p/", [X, Y]),
-    Filename = lists:concat([Dir, "data.json"]),
+    % Costruisce il nome del file con la reference del Pid
+    Filename = io_lib:format("../DB/json/~p.json", [Node#node.pid]),
 
-    % Crea la cartella DB/X_Y/ se non esiste
+    % Crea la cartella se non esiste
     filelib:ensure_dir(Filename),
-
-    % Ottieni il tempo come stringa formattata "HH:MM:SS"
-    TimeFormatted = format_time(Node#node.time),
 
     % Costruisci i dati JSON del leader e del nodo associato in formato stringa
     JsonData = io_lib:format(
-        "{\n\"leader_id\": \"~s\", \"color\": \"~s\", \"server_id\": \"~s\", \"adj_clusters\": ~s, \"nodes_in_cluster\": ~s,\n" ++
-            "\"node\": {\n\"x\": ~p, \"y\": ~p, \"parent\": \"~s\", \"children\": ~s, \"time\": ~p, \"leader_id\": \"~s\", \"pid\": \"~s\", \"neighbors\": ~s\n}}",
+        "{\n\"leader_id\": \"~s\", \"color\": \"~s\", \"adj_clusters\": ~s, \"cluster_nodes\": ~s,\n" ++
+            "\"node\": {\n\"pid\": \"~s\", \"x\": ~p, \"y\": ~p, \"leader_id\": \"~s\", \"neighbors\": ~s\n}}",
         [
             pid_to_string(Node#node.pid),
             atom_to_string(Leader#leader.color),
-            pid_to_string(Leader#leader.serverID),
-            convert_adj_clusters(Leader#leader.adjClusters),
-            convert_node_list(Leader#leader.nodes_in_cluster),
-            X,
-            Y,
-            pid_to_string(Node#node.parent),
-            convert_node_list(Node#node.children),
-            TimeFormatted,
-            pid_to_string(Node#node.leaderID),
+            convert_adj_clusters(Leader#leader.adj_clusters),
+            convert_node_list(Leader#leader.cluster_nodes),
             pid_to_string(Node#node.pid),
+            Node#node.x,
+            Node#node.y,
+            pid_to_string(Node#node.leaderID),
             convert_adj_clusters(Node#node.neighbors)
         ]
     ),
 
-    % Salva i dati JSON in DB/X_Y/data.json
     file:write_file(Filename, lists:flatten(JsonData)).
-    % io:format("Dati di Leader (~p,~p) con PID ~p salvati in: ~s~n", [X, Y, self(), Filename]).
+% io:format("Dati di Leader (~p,~p) con PID ~p salvati in: ~s~n", [X, Y, self(), Filename]).
 
 %% Funzione helper per convertire la lista di cluster adiacenti in formato JSON-friendly
 convert_adj_clusters(AdjClusters) ->
@@ -207,11 +199,23 @@ log_operation(Event) ->
     ]),
     file:write_file(LogFile, lists:flatten(LogEntry), [append]).
 
-    % io:format("Operazione loggata: '~s: {~p, ~p, ~p}'~n", [TimestampStr, Event#event.type, Event#event.color, Reference]).
+% io:format("Operazione loggata: '~s: {~p, ~p, ~p}'~n", [TimestampStr, Event#event.type, Event#event.color, Reference]).
+
+reference(Node, Pid) ->
+    Reference = list_to_atom(
+        lists:flatten(
+            io_lib:format("node~p_~p", [Node#node.x, Node#node.y])
+        )
+    ),
+    register(Reference, Pid),
+    Reference.
 
 get_reference(Pid) ->
     {_, Reference} = process_info(Pid, registered_name),
     Reference.
+
+coordinate_to_reference(X, Y) ->
+    list_to_atom(lists:flatten(io_lib:format("node~p_~p", [X, Y]))).
 
 %% ------------------
 %%
@@ -243,14 +247,11 @@ save_node_data_to_file(Node) ->
 
     % Costruisci i dati JSON del nodo in formato stringa
     JsonData = io_lib:format(
-        "{\n\"pid\": \"~s\", \"x\": ~p, \"y\": ~p, \"parent\": \"~s\", \"children\": ~s, \"time\": \"~s\", \"leader_id\": \"~s\", \"neighbors\": ~s\n}",
+        "{\n\"pid\": \"~s\", \"x\": ~p, \"y\": ~p, \"leader_id\": \"~s\", \"neighbors\": ~s\n}",
         [
             pid_to_string(Node#node.pid),
             X,
             Y,
-            pid_to_string(Node#node.parent),
-            convert_node_list(Node#node.children),
-            format_time(Node#node.time),
             pid_to_string(Node#node.leaderID),
             convert_adj_clusters(Node#node.neighbors)
         ]
@@ -258,4 +259,4 @@ save_node_data_to_file(Node) ->
 
     % Save the JSON data to the file
     file:write_file(Filename, lists:flatten(JsonData)).
-    % io:format("Node data saved in: ~s~n", [Filename]).
+% io:format("Node data saved in: ~s~n", [Filename]).
