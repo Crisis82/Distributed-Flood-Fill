@@ -1,7 +1,6 @@
 \documentclass[12pt, a4paper]{report}
 
 \input{preamble}
-\usepackage[italian]{babel}
 
 \title{\Huge{Implementazione distribuita dell'algoritmo Flood-Fill}}
 \author{\Large{\textit{Tam Gabriele, Merlo Filippo}}}
@@ -1055,7 +1054,8 @@ Il modulo \texttt{node.erl} gestisce la creazione e gestione di ciascun nodo nel
 \begin{tcolorbox}[title=Creazione di un nodo]
 \begin{verbatim}
 new_node(X, Y) -> #node{x = X, y = Y}.
-new_leader(X, Y, Color) -> #leader{node = new_node(X, Y), color = Color}.
+new_leader(X, Y, Color) ->
+    #leader{node = new_node(X, Y), color = Color}.
 \end{verbatim}
 \end{tcolorbox}
 
