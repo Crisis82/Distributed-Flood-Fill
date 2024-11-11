@@ -1,6 +1,7 @@
 \documentclass[12pt, a4paper]{report}
 
 \input{preamble}
+\usepackage[italian]{babel}
 
 \title{\Huge{Implementazione distribuita dell'algoritmo Flood-Fill}}
 \author{\Large{\textit{Tam Gabriele, Merlo Filippo}}}
@@ -297,9 +298,8 @@ In questa fase, i cluster scoprono i loro vicini e viene costruita una rete over
     \begin{itemize} 
         \item Ogni nodo invia una richiesta ai suoi vicini per ottenere il loro \texttt{leaderID}.
         \item Se un vicino appartiene a un altro cluster (cio\`e, ha un \texttt{leaderID} diverso), il nodo riceve in risposta il \texttt{leaderID} e il colore del vicino. 
-        \item Il nodo aggrega queste informazioni (\texttt{leaderID} e colore dei vicini) al proprio ID e le inoltra al proprio \texttt{parent}. 
-        \item I nodi interni del cluster aggregano a loro volta le informazioni ricevute dai figli, includendo anche il loro ID, e le inoltrano al proprio \texttt{parent} fino a raggiungere il leader del cluster.
-        \item Il leader riceve così le informazioni complete sui cluster adiacenti (compresi i \texttt{leaderID} e i colori) e anche gli ID di tutti i nodi del proprio cluster. 
+        \item Il nodo aggrega queste informazioni (\texttt{leaderID} e colore dei vicini) e le inoltra al leader. 
+        \item Il leader riceve così le informazioni complete sui cluster adiacenti (compresi i \texttt{leaderID} e i colori). 
         \item Infine, il leader invia al server una lista completa che include: 
         \begin{itemize} 
             \item Gli ID di tutti i nodi del proprio cluster. 
@@ -312,20 +312,11 @@ In questa fase, i cluster scoprono i loro vicini e viene costruita una rete over
 
     Una volta che il server ha ricevuto tutte le informazioni dai leader, viene costruita una rete overlay tra i leader dei vari cluster: così facendo i leader possono comunicare tra loro direttamente per coordinare le operazioni future, come la gestione dei conflitti e il merge di cluster adiacenti.
 
-    \item \textbf{Impostazione del timestamp e avvio del sistema:}
-
-    In questa fase, il time-server propaga in broadcast il timestamp corrente a tutti i nodi (leader e non) del grafo. Al termine di questo processo, ogni nodo sar\`a sincronizzato allo stesso tempo e disponibile a creare nuove richieste di cambio colore, usando il timestamp acquisito.
-    
-    Durante la fase operativa del sistema distribuito, il time-server si occuper\`a di inviare ciclicamente un nuovo timestamp a tutti i nodi, evitando cos\`i possibili divergenze del tempo locale tra i vari nodi.
-
     \item \textbf{Ottimizzazione finale dei nodi non leader:}
 
     Dopo l'avvio del sistema, i nodi che non sono leader rimuovono tutte le informazioni non pi\`u necessarie, mantenendo solo:
     \begin{itemize}
         \item \texttt{leaderID}: l'identificatore del leader del proprio cluster.
-        \item \texttt{parent}: il riferimento al nodo genitore nel cluster.
-        \item \texttt{children}: il riferimento ai nodi figli nel cluster.
-        \item \texttt{timestamp}: il ``seed'' del tempo inviato dal time-server, necessario per tenere traccia localmente del tempo.
         \item Le proprie coordinate \texttt{(x, y)}.
     \end{itemize}
 
@@ -340,7 +331,7 @@ Al termine delle due fasi, il sistema sar\`a organizzato come segue:
 \begin{itemize}
     \item Il grafo $G$ \`e completamente costruito, con il server come radice e i cluster come sotto-grafi.
     \item \`E stata creata una rete overlay tra i nodi leader dei cluster, permettendo la comunicazione diretta tra i leader.
-    \item Tutti i nodi non leader hanno rimosso le informazioni non necessarie, mantenendo solo il \texttt{leaderID}, il \texttt{parent} e le proprie coordinate.
+    \item Tutti i nodi non leader hanno rimosso le informazioni non necessarie, mantenendo solo il \texttt{leaderID} e le proprie coordinate.
     \item Il sistema \`e sincronizzato temporalmente ed \`e pronto per entrare nella fase operativa.
 
 \begin{figure}
@@ -397,10 +388,7 @@ Il sistema \`e composto da due tipi principali di nodi:
     \item \textbf{Nodi normali}: rappresentano i pixel dell'immagine e mantengono informazioni minime. Ogni nodo normale conosce:
     \begin{itemize}
         \item Le proprie coordinate \texttt{(x, y)} all'interno dell'immagine.
-        \item Il nodo successivo nell'albero di copertura interno al cluster (\texttt{parent}), ossia il proprio genitore nel cluster.
         \item Il proprio \texttt{leaderID}, che identifica il leader del cluster a cui appartiene.
-        \item Il proprio \texttt{timestamp}, utilizzato per mantenere la sincronizzazione con il cluster e identificare l'ordine delle operazioni.
-         \item La lista dei propri \texttt{children}, che contiene i nodi normali direttamente collegati (i figli) all'interno del cluster. Se un nodo \`e una foglia, la lista sar\`a vuota.
     \end{itemize}
 
     \item \textbf{Nodi leader}: sono responsabili della gestione del cluster. Ogni nodo leader mantiene:
@@ -409,8 +397,8 @@ Il sistema \`e composto da due tipi principali di nodi:
         \item Il colore del cluster (\texttt{color}).
         \item La \texttt{lista dei nodi leader} dei cluster adiacenti nel grafo overlay.
         \item L'identificatore del server (\texttt{serverID}).
-        \item Il proprio \texttt{timestamp}, che viene utilizzato per sincronizzare le operazioni tra i nodi del cluster e tra i leader nella rete overlay.
-        \item La lista dei propri \texttt{children}, ossia i nodi del cluster di cui il leader \`e collegato direttamente.
+        \item L'ultimo evento che il nodo ha gestito e il suo rispettivo timestamp (serve per gestire i casi di concorrenza).
+        \item La lista \texttt{cluster\_nodes}, ossia i nodi del cluster di cui il leader \`e collegato direttamente.
     \end{itemize}
 \end{enumerate}
 
