@@ -26,7 +26,7 @@ In questo capitolo viene descritto il problema principale affrontato dal progett
 
 \section{Descrizione del problema}
 
-Il problema consiste nel ricolorare un'area connessa di una matrice bidimensionale $img[N][M]$, dove ogni elemento $img[i][j]$\footnote{con $0 \le i < N$ e $0 \le j < M$} rappresenta il colore di un pixel in posizione $(i,j)$. Dato un pixel iniziale in posizione \texttt{(x, y)} e un nuovo colore \texttt{newColor}, l'obiettivo \`e rimpiazzare il colore del pixel selezionato e di tutti i pixel adiacenti che condividono lo stesso colore iniziale con \texttt{newColor} (vedi Fig.~\ref{fig:esempio_nodi}). Questa ricolorazione deve propagarsi attraverso nodi adiacenti, in tutte le direzioni (orizzontale, verticale, diagonale).
+Il problema consiste nel ricolorare un'area connessa di una matrice bidimensionale $img[N][M]$, dove ogni elemento $img[i][j]$\footnote{con $0 \le i < N$ e $0 \le j < M$} rappresenta il colore di un pixel in posizione $(i,j)$. Dato un pixel iniziale in posizione \texttt{(x, y)} e un nuovo colore \texttt{newColor}, l'obiettivo \`e cambiare il colore del pixel selezionato e di tutti i pixel adiacenti che condividono lo stesso colore iniziale con \texttt{newColor} (vedi Fig.~\ref{fig:esempio_nodi}). Questa ricolorazione deve propagarsi attraverso nodi adiacenti, in tutte le direzioni (orizzontale, verticale, diagonale).
 
 \begin{figure}[H]
     \captionsetup{justification=centering, margin=2cm}
@@ -35,7 +35,7 @@ Il problema consiste nel ricolorare un'area connessa di una matrice bidimensiona
         \captionsetup{justification=centering, margin=1cm}
         \centering
         \input{tikz/tikzpicture3.tikz}
-        \caption{L'area evidenziata in grigio sono i nodi adiancenti.}
+        \caption{L'area evidenziata in grigio sono i nodi adiacenti.}
         \label{fig:nodi_adiacenti}
     \end{subfigure}
     \hfill
@@ -60,11 +60,11 @@ Per una migliore comprensione e per evitare ambiguit\`a, vengono definiti alcuni
 \begin{itemize}[label=]
     \item \textbf{Nodo}: un processo autonomo nella rete, responsabile di un singolo pixel dell'immagine.
     \item \textbf{Colore}: la propriet\`a associata a ciascun nodo, che rappresenta lo stato corrente (colore) del pixel.
-    \item \textbf{Nodi adiacenti}: i nodi che si trovano in posizioni adiacenti nella matrice, ovvero collegati orizzontalmente, verticalmente o diagonalmente.
+    \item \textbf{Nodi adiacenti}: i nodi che si trovano in posizioni fisicamente adiacenti nella matrice, ovvero collegati orizzontalmente, verticalmente o diagonalmente.
     \item \textbf{Cluster}: un gruppo di nodi, i quali condividono lo stesso colore e sono connessi tra loro. Nel nostro approccio di soluzione, i cluster vengono gestiti a livello locale per ottimizzare le operazioni di ricolorazione.
     \item \textbf{Nodo Leader}: il nodo designato all'interno di un cluster per coordinare le operazioni globali, come l'avvio delle ricolorazioni e la fusione con altri cluster.
-    \item \textbf{Ricolorazione/Cambio di colore}: l'operazione di aggiornamento del colore di un cluster innescata dalla scelta di un nodo iniziale.
-    \item \textbf{Fusione/Unione/Merge di cluster}: l'unione di due o pi\`u cluster adiacenti quando questi condividono lo stesso colore a seguito di operazioni di ricolorazione, gestita dai rispettivi nodi leader.
+    \item \textbf{Ricolorazione/Cambio colore}: l'operazione di aggiornamento del colore di un cluster.
+    \item \textbf{Unione/Merge di cluster}: l'unione di due o pi\`u cluster in uno singolo, nel caso in cui questi siano adiacenti e condividano lo stesso colore. Quest'operazione avviene in seguito a un cambio colore.
 \end{itemize}
 
 \section{Struttura complessiva dell'implementazione}
@@ -76,30 +76,30 @@ Il sistema \`e strutturato come una rete di nodi, i quali sono organizzati in cl
 Il sistema implementa diverse funzionalit\`a proprie dei sistemi distribuiti:
 \begin{itemize}
     \item \textbf{Trasparenza nella comunicazione}: ogni nodo comunica direttamente con i nodi adiacenti, o con il leader del cluster, senza necessit\`a di conoscere la topologia completa.
-    \item \textbf{Consistenza}: la consistenza globale del sistema \`e garantita tramite l'associazione delle operazioni a \textbf{timestamps}, grazie ai quali risulta possibile ordinarle correttamente, evitando possibili conflitti dovuti alla concorrenza.
-    \item \textbf{Tolleranza ai guasti}: meccanismi di failover assicurano che il sistema possa continuare a funzionare anche in caso di guasti di singoli nodi (sia normali che leader).
+    \item \textbf{Consistenza}: la consistenza globale del sistema \`e garantita tramite l'associazione di ogni operazione a un record evento. Gli eventi garantiscono sia una corretta gestione delle operazioni, tramite l'ordinamento per \textbf{timestamp} ed \textbf{id}, sia la loro archiviazione tramite logging. Vengono evitati cos\`i possibili conflitti dovuti alla concorrenza.
+    \item \textbf{Tolleranza ai guasti}: meccanismi di failover assicurano che il sistema possa continuare a funzionare anche in caso di guasti di singoli nodi (sia normali che leader). I processi di ogni nodo vengono monitorati in caso di arresti inaspettati e riavviati immediatamente.
 \end{itemize}
 
 \section{Algoritmi implementati}
 
 Il sistema utilizza vari algoritmi per garantire la corretta esecuzione dell'algoritmo distribuito di Flood-Fill:
 \begin{itemize}
-    \item \textbf{Algoritmo di cambio colore}: i nodi comunicano col leader per avviare la propagazione della ricolorazione. Il leader coordina l'operazione per evitare conflitti tra pi\`u richieste.
-    \item \textbf{Algoritmo di merge dei cluster}: quando due cluster adiacenti vengono ricolorati con lo stesso colore, i leader coordinano l'unione dei cluster e la gestione dei loro confini.
+    \item \textbf{Algoritmo di cambio colore}: i nodi comunicano al leader del cluster la volont\`a di cambiare colore. Quest'ultimo gestisce le richieste per mezzo di una coda e comunica ognuna al server per avere la conferma per procedere con la ricolorazione locale. Il server viene coinvolto sia per garantire la consistenza, sia per evitare comportamenti inaspettati del sistema nel caso di operazioni concorrenti in cluster differenti.
+    \item \textbf{Algoritmo di merge dei cluster}: quando due cluster adiacenti condividono lo stesso colore (in seguito a operazioni di cambio colore), i leader coinvolti ed il server collaborano per eseguire l'operazione di merge.
     \item \textbf{Algoritmo di gestione dei fallimenti}: include procedure per la rielezione dei leader e la gestione dei nodi disconnessi o falliti.
 \end{itemize}
 
 \section{Piano di test}
 
-Il sistema sar\`a testato simulando scenari di ricolorazione su immagini di grandi dimensioni: i test valuteranno la robustezza del sistema in situazioni di concorrenza (pi\`u richieste simultanee di cambio colore) e in presenza di guasti di nodi leader o normali. L'attenzione sar\`a posta sulla consistenza delle operazioni distribuite.
+Il sistema sar\`a testato simulando scenari di ricolorazione su immagini di grandi dimensioni: i test valuteranno la robustezza del sistema in differenti situazioni di concorrenza (concorrenza di cambio colore intra/extra-cluster e del merge di cluster) ed anche in presenza di guasti di nodi. L'attenzione sar\`a posta sulla consistenza delle operazioni distribuite.
 
 \section{Programma di sviluppo}
 
 Il progetto si articola in diverse fasi:
 \begin{enumerate}
     \item \textbf{Fase di progettazione}: definizione dell'architettura del sistema e degli algoritmi distribuiti.
-    \item \textbf{Fase di implementazione}: sviluppo dei componenti principali, tra cui i nodi normali, i nodi leader e il server centrale, con particolare attenzione alla gestione della consistenza e dei guasti.
-    \item \textbf{Fase di testing}: esecuzione di test per verificare il corretto funzionamento del sistema.
+    \item \textbf{Fase d'implementazione}: sviluppo del codice del sistema distribuito nel linguaggio Erlang e scrittura del frontend e degli script di test in Python.
+    \item \textbf{Fase di testing}: esecuzione di test per verificare il corretto funzionamento del sistema, nonch\`e valutazione delle prestazioni e della scalabilit\`a del sistema sviluppato.
 \end{enumerate}
 
 \chapter{Analisi}\label{chapter:analisi}
@@ -115,13 +115,13 @@ I requisiti funzionali definiscono le operazioni principali che il sistema deve 
 
     \item \textbf{Gestione di richieste concorrenti}: il sistema deve essere in grado di gestire pi\`u richieste di ricolorazione simultanee provenienti da nodi diversi, garantendo un comportamento deterministico e la corretta risoluzione dei conflitti.
 
-    \item \textbf{Comunicazione tra nodi}: i nodi devono essere in grado di scambiarsi messaggi con i loro vicini adiacenti per sincronizzare lo stato e coordinare le operazioni di colorazione. Ogni nodo deve mantenere aggiornate le informazioni relative ai vicini e al leader del proprio cluster.
+    \item \textbf{Comunicazione tra nodi}: i nodi devono essere in grado di scambiarsi messaggi con i loro vicini adiacenti per la sincronizzazione dello stato e la coordinazione delle operazioni. Ogni nodo deve mantenere aggiornate le informazioni relative ai vicini e al leader del proprio cluster.
 
-    \item \textbf{Fusione dei cluster}: quando due cluster adiacenti diventano dello stesso colore a seguito di una ricolorazione, il sistema deve unificarli in uno solo. Il nodo leader del cluster risultante deve gestire le future operazioni di ricolorazione e fusione.
+    \item \textbf{Unione di cluster}: quando due o pi\`u cluster adiacenti diventano dello stesso colore in seguito a ricolorazioni, il sistema deve unificarli in uno solo.
 
     \item \textbf{Tolleranza ai guasti}: il sistema deve essere in grado di gestire il fallimento di singoli nodi, sia leader che normali, garantendo che il resto del cluster continui a operare correttamente. Devono essere previsti meccanismi di failover per la rielezione dei leader.
 
-    \item \textbf{Consistenza globale}: il sistema deve mantenere una consistenza globale dello stato, garantendo che tutti i nodi di un cluster condividano lo stesso colore dopo ogni operazione di ricolorazione o fusione.
+    \item \textbf{Consistenza globale}: il sistema deve mantenere una consistenza globale dello stato, garantendo che tutti i nodi di un cluster condividano lo stesso colore dopo ogni operazione di cambio colore o merge.
 \end{enumerate}
 
 \newpage
@@ -132,7 +132,7 @@ I requisiti non funzionali riguardano le qualit\`a desiderabili del sistema, tra
 \begin{enumerate}
     \item \textbf{Scalabilit\`a}: il sistema deve essere in grado di supportare un elevato numero di nodi, mantenendo buone prestazioni anche con una rete distribuita estesa.
 
-    \item \textbf{Efficienza delle comunicazioni}: il numero di messaggi scambiati tra i nodi deve essere minimizzato per evitare sovraccarichi di rete. L'algoritmo di ricolorazione e fusione deve utilizzare una comunicazione locale, limitata ai vicini diretti, salvo necessit\`a di sincronizzazione globale.
+    \item \textbf{Efficienza delle comunicazioni}: il numero di messaggi scambiati tra i nodi deve essere minimizzato per evitare sovraccarichi di rete. Gli algoritmi di ricolorazione e unione devono utilizzare una comunicazione locale, limitata ai vicini diretti, salvo necessit\`a di sincronizzazione globale.
 
     \item \textbf{Robustezza e affidabilit\`a}: il sistema deve essere resiliente ai guasti e garantire il recupero rapido dopo il fallimento di uno o pi\`u nodi, inclusi i nodi leader. Deve essere possibile continuare le operazioni anche in caso di guasti isolati.
 
@@ -153,7 +153,7 @@ Le seguenti assunzioni e vincoli sono stati considerati per l'implementazione de
 
     \item \textbf{Conoscenza locale}: ogni nodo ha una conoscenza locale limitata dei propri vicini e del leader del proprio cluster. Nessun nodo ha una visione globale dell'intera rete o di tutti i cluster.
 
-    \item \textbf{Inizializzazione dei nodi}: al momento dell'avvio, ogni nodo conosce solo le proprie coordinate all'interno della matrice dell'immagine e il colore iniziale del pixel che rappresenta. La formazione dei cluster e la gestione della rete overlay avvengono durante la fase di esecuzione.
+    \item \textbf{Inizializzazione dei nodi}: al momento dell'avvio, ogni nodo conosce solo le proprie coordinate all'interno della matrice dell'immagine e il colore iniziale del pixel che rappresenta. La formazione dei cluster e la gestione della rete overlay avvengono durante la fase iniziale d'avvio del sistema.
 
 \end{itemize}
 
@@ -166,7 +166,7 @@ In questo capitolo viene presentata la progettazione del sistema: verranno anali
 Sono stati considerati due principali approcci:
 
 \begin{enumerate}
-    \item \textbf{Comunicazione diretta tra nodi}: ogni nodo comunica unicamente coi propri nodi adiacenti per propagare il cambiamento di colore.
+    \item \textbf{Comunicazione diretta tra nodi}: nodi normali e leader comunicano direttamente tra loro per eseguire le operazioni di cambio colore e merge. Cluster adiacenti comunicano direttamente per mezzo dei propri leader.
     \item \textbf{Partizionamento del grafo e elezione di nodi leader}: il grafo viene suddiviso in cluster, ciascuno gestito dal proprio nodo leader che ne coordina operazioni (e.g. ricolorazione) ed organizzazione (e.g. fallimento di nodi, merge, $\ldots$).
 \end{enumerate}
 
@@ -226,113 +226,51 @@ L'idea centrale della soluzione \`e la seguente:
     \item \textbf{Trattamento dei cluster come nodi in un grafo overlay}: ogni cluster viene considerato come un singolo nodo in un grafo overlay, dove i nodi rappresentano i leader dei cluster e gli archi rappresentano le adiacenze tra cluster.
     \item \textbf{Comunicazione tra leader}: i nodi leader mantengono una lista dei leader adiacenti nel grafo overlay, permettendo comunicazioni dirette per le operazioni di merge e coordinamento.
     \item \textbf{Utilizzo di un server centrale per la sincronizzazione}: implementazione di un server condiviso per gestione, ordinamento e memorizzazione delle operazioni eseguite. Facilita la consistenza e la gestione delle operazioni concorrenti, fornendo al tempo stesso ridondanza sia delle operazioni eseguite (attraverso un file di log) sia dello stato globale della rete.
-    \item \textbf{Rappresentazione dei cluster tramite sotto-grafi}: la visione a grafo della rete permette una creazione e gestione facilitata di sotto-grafi, i quali risultano la struttura ideale per la rappresentazione dei cluster, in quanto condividono le stesse propriet\`a connettive e si adattano alle loro strutture amorfe.
 \end{itemize}
 
 \subsection{Setup iniziale}
 
-La fase di setup \`e fondamentale per l'inizializzazione dei parametri dei nodi e la costruzione dei cluster, i quali costituiranno il sistema distribuito. Poiché i nodi inizialmente conoscono solo informazioni su loro stessi, il processo di formazione dei cluster e la scoperta delle connessioni tra di essi viene suddiviso in due fasi, ciascuna con uno scopo specifico:
+La fase di setup \`e fondamentale per l'inizializzazione dei parametri dei nodi e la costruzione dei cluster, i quali costituiranno il sistema distribuito. Poiché i nodi inizialmente conoscono solo informazioni su loro stessi, il processo di formazione dei cluster e la scoperta delle connessioni tra di essi viene suddiviso in tre fasi, ciascuna con uno scopo specifico:
 
 \begin{itemize}
-    \item \textbf{Fase 1: Formazione dei cluster e costruzione del grafo $G$}
-    \item \textbf{Fase 2: Scoperta dei cluster adiacenti, costruzione della rete overlay e impostazione dei timestamp}
+    \item \textbf{Fase 1: Scoperta dei vicini}
+    \item \textbf{Fase 2: Formazione dei cluster}
+    \item \textbf{Fase 3: Scoperta dei cluster adiacenti e costruzione della rete overlay}
 \end{itemize}
 
-\paragraph{Fase 1: Formazione dei cluster e costruzione del grafo}
-Questa fase ha come obiettivo la scoperta dei cluster iniziali e la costruzione del grafo $G$, che rappresenter\`a la rete di comunicazione tra il server e i vari cluster.
 
-\begin{enumerate}
-    \item \textbf{Assegnazione dei colori ai nodi:}
+Inizialmente ogni nodo conosce solo:
+\begin{itemize}
+    \item Le proprie coordinate \texttt{(x, y)} nell'immagine.
+    \item Il proprio colore \texttt{color}, assegnato randomicamente da una palette predefinita oppure impostato dall'utente attraverso un file contente la lista dei colori.
+    % \item I nodi vicini (\texttt{neighbors}), calcolati in base alle coordinate.
+    % \item Un identificatore temporaneo \texttt{leaderID}, inizialmente impostato a \texttt{null}.
+    % \item Una variabile \texttt{visited}, inizialmente impostata a \texttt{False}, che indica se il nodo \`e stato visitato.
+\end{itemize}
 
-    Ogni nodo riceve un colore iniziale scelto casualmente da una palette predefinita. Ogni pixel dell'immagine, di dimensioni $N \times M$, condivider\`a il colore del nodo corrispondente. Questa informazione viene memorizzata localmente da ciascun nodo.
+\paragraph{Fase 1: Scoperta dei vicini}
+Attraverso le coordinate del nodo, vengono calcolate le posizioni dei nodi adiacenti. Con queste vengono recuperati gli id dei nodi, i quali vengono salvati nella lista \textit{neighbors}.
 
-    \item \textbf{Conoscenze iniziali di ciascun nodo:}
-
-    All'inizio di questa fase, ogni nodo conosce solo:
-    \begin{itemize}
-        \item Le proprie coordinate \texttt{(x, y)} nell'immagine.
-        \item Il proprio colore \texttt{color}.
-        \item I nodi vicini (\texttt{neighbors}), calcolati in base alle coordinate.
-        \item Un identificatore temporaneo \texttt{leaderID}, inizialmente impostato a \texttt{null}.
-        \item Una variabile \texttt{visited}, inizialmente impostata a \texttt{False}, che indica se il nodo \`e stato visitato.
-    \end{itemize}
-
-    \item \textbf{Avvio della BFS\footnote{Breadth-First Search} da parte del server:}
-
-    Poiché i nodi non possono autonomamente iniziare la BFS, sar\`a il server a gestire questa fase. Il server scorre l'immagine in modo ordinato (da sinistra a destra e dall'alto in basso) e invia un messaggio di avvio al primo nodo non ancora visitato, partendo da $(0, 0)$.
-
-    \begin{itemize}
-        \item Il nodo $(0, 0)$ avvia una BFS, visitando tutti i nodi adiacenti con lo stesso colore e aggiornando il proprio \texttt{leaderID}, che diventer\`a lo stesso per tutti i nodi del cluster.
-        \item Ogni nodo visitato durante la BFS aggiorna la sua variabile \texttt{visited} a \texttt{True} e propaga il \texttt{leaderID} ai suoi vicini dello stesso cluster.
-    \end{itemize}
-
-    \item \textbf{Comunicazione con il server e costruzione del grafo $G$:}
-
-    Alla fine di ogni BFS, il nodo leader del cluster invia un messaggio al server con le seguenti informazioni:
-    \begin{itemize}
-        \item \texttt{leaderID}: l'identificatore del leader del cluster.
-        \item \texttt{color}: il colore del cluster.
-    \end{itemize}
-
-    Il server registra queste informazioni e costruisce progressivamente il grafo $G$, che ha come nodo radice il server stesso e come sottografi i cluster rappresentati dai rispettivi leader. Ogni cluster \`e dunque un sottografo di $G$ con il leader come nodo radice del sottografo.
-
-    \item \textbf{Avvio della BFS per gli altri nodi:}
-
-    Il server continua a scorrere l'immagine. Se un nodo \`e gi\`a stato visitato (fa gi\`a parte di un cluster), il server lo ignora e passa al successivo. Se un nodo non \`e stato visitato, avvia una nuova BFS per creare un nuovo cluster. Questo processo continua fino a quando tutti i nodi dell'immagine non sono stati visitati e assegnati a un cluster.
-
-    \item \textbf{Conclusione della fase 1:}
-
-    Al termine della Fase 1, il server ha creato un grafo $G$ completo, con tanti sottografi quante sono le componenti connesse dell'immagine (i cluster), ognuna con un leader identificato.
+\paragraph{Fase 2: Formazione dei cluster}
+Per ogni nodo del sistema viene eseguito un algoritmo di scoperta dei nodi del cluster simile all'algoritmo BFS\footnote{Breadth-First Search}. Ad ogni nodo viene associata una variable \textit{Visited} inizialmente impostata a \texttt{False}. Sfruttando la lista \textit{neighbors} creata nella fase precedente, vengono ricorsivamente scoperti i nodi adiacenti tra loro che condividono lo stesso colore. L'algoritmo di visita termina quando non ci sono pi\`u vicini con colore uguale a quello del nodo di partenza. Ogni nodo che inizia l'algoritmo di visita diventa leader del cluster, mentre tutti i nodi scoperti saranno nodi normali che fanno parte del cluster. Ogni nodo del cluster viene salvato nella lista \textit{cluster\_nodes}.
     
-\end{enumerate}
-
-\paragraph{Fase 2: Scoperta dei cluster adiacenti e creazione della rete overlay}
-
-In questa fase, i cluster scoprono i loro vicini e viene costruita una rete overlay tra i leader, con il server che gestisce la sincronizzazione e la comunicazione tra di essi.
-
-\begin{enumerate}
-    \item \textbf{Scoperta dei cluster adiacenti:}
-
-    Il server invia un messaggio a ciascun leader per iniziare la scoperta dei cluster adiacenti. Ogni leader invia una richiesta a tutti i nodi del proprio cluster per verificare se i vicini appartengono a un altro cluster, raccogliendo anche gli ID dei nodi.
-
-    \begin{itemize} 
-        \item Ogni nodo invia una richiesta ai suoi vicini per ottenere il loro \texttt{leaderID}.
-        \item Se un vicino appartiene a un altro cluster (cio\`e, ha un \texttt{leaderID} diverso), il nodo riceve in risposta il \texttt{leaderID} e il colore del vicino. 
-        \item Il nodo aggrega queste informazioni (\texttt{leaderID} e colore dei vicini) e le inoltra al leader. 
-        \item Il leader riceve così le informazioni complete sui cluster adiacenti (compresi i \texttt{leaderID} e i colori). 
-        \item Infine, il leader invia al server una lista completa che include: 
-        \begin{itemize} 
-            \item Gli ID di tutti i nodi del proprio cluster. 
-            \item Una lista dei \texttt{leaderID} dei cluster adiacenti. 
-            \item Il colore dei cluster adiacenti. 
-        \end{itemize} 
-    \end{itemize}
-
-    \item \textbf{Creazione della rete overlay tra i leader:}
-
-    Una volta che il server ha ricevuto tutte le informazioni dai leader, viene costruita una rete overlay tra i leader dei vari cluster: così facendo i leader possono comunicare tra loro direttamente per coordinare le operazioni future, come la gestione dei conflitti e il merge di cluster adiacenti.
-
-    \item \textbf{Ottimizzazione finale dei nodi non leader:}
-
-    Dopo l'avvio del sistema, i nodi che non sono leader rimuovono tutte le informazioni non pi\`u necessarie, mantenendo solo:
-    \begin{itemize}
-        \item \texttt{leaderID}: l'identificatore del leader del proprio cluster.
-        \item Le proprie coordinate \texttt{(x, y)}.
-    \end{itemize}
-
-    Questo processo riduce l'overhead e ottimizza la memoria utilizzata dai nodi.
-
-\end{enumerate}
+\paragraph{Fase 3: Scoperta dei cluster adiacenti e creazione della rete overlay}
+Nella terza ed ultima fase, viene costruita la lista dei cluster adiacenti, in cui ogni elemento della lista \`e una tripla del tipo \texttt{\{pid, colore, leader\}}. La lista (\textit{adj\_nodes}) viene costruita facendo la sottrazione della lista dei nodi del cluster (\textit{cluster\_nodes}) dalla lista cumulativa di tutti i vicini (\textit{neighbors}) di ogni nodo. La lista ottenuta \`e costituita da tutti i nodi che compongono il ``contorno'' del cluster, ovvero nodi vicini ma con colore diverso.
+Infine per ogni nodo nella lista vengono prese le informazioni riguardo all'id del leader e il colore del cluster, rimuovendo possibili duplicati e salvando tutto nella lista \textit{adj\_clusters}.
 
 \paragraph{Conclusione del setup}
-
-Al termine delle due fasi, il sistema sar\`a organizzato come segue:
-
+Al termine delle 3 fasi di setup, ogni nodo non leader viene trasformato in nodo normale rimuovendo le informazioni non pi\`u necessarie, ma mantendendo solo
 \begin{itemize}
-    \item Il grafo $G$ \`e completamente costruito, con il server come radice e i cluster come sotto-grafi.
-    \item \`E stata creata una rete overlay tra i nodi leader dei cluster, permettendo la comunicazione diretta tra i leader.
-    \item Tutti i nodi non leader hanno rimosso le informazioni non necessarie, mantenendo solo il \texttt{leaderID} e le proprie coordinate.
-    \item Il sistema \`e sincronizzato temporalmente ed \`e pronto per entrare nella fase operativa.
+    \item \texttt{pid}: l'id del processo nodo.
+    \item \texttt{(x, y)}: le proprie coordinate.
+    \item \texttt{leaderID}: l'identificatore del leader del proprio cluster.
+    \item \texttt{neighbors}: la lista dei nodi fisicamente vicini (indipendentemente dal colore).
+\end{itemize}
+Questo processo riduce l'overhead e ottimizza la memoria utilizzata dai nodi.
+
+Al contrario, ogni leader comunica le informazioni del proprio cluster al server e quest'ultimo si occuper\`a di salvare lo stato globale del sistema.
+
+Il sistema \`e ora sincronizzato ed \`e pronto per entrare nella fase operativa.
 
 \begin{figure}
     \centering
@@ -341,28 +279,33 @@ Al termine delle due fasi, il sistema sar\`a organizzato come segue:
     \label{fig:enter-label}
 \end{figure}
 
-\end{itemize}
-
 \paragraph{Complessit\`a della fase di setup}
 
 Di seguito viene riportata l'analisi della complessit\`a delle due fasi.
 
 \begin{itemize}
-    \item \textbf{Fase 1: Formazione dei cluster tramite BFS}
+    \item \textbf{Fase 1: Scoperta dei vicini}
     \begin{itemize}
-        \item Il server avvia una BFS per formare i cluster, scorrendo l'immagine da sinistra a destra e dall'alto verso il basso.
-        \item Per ogni nodo non ancora visitato, viene avviata una BFS che include tutti i nodi adiacenti con lo stesso colore.
-        \item La complessit\`a della BFS per ogni cluster \`e lineare rispetto al numero di nodi nel cluster, ossia $O(k)$, dove $k$ \`e il numero di nodi del cluster.
+      \item Per ogni nodo vengono calcolati i vicini usando la propria posizione, pertanto vengono eseguite $N \times M$ chiamate.
+      \item Ciascuna chiamata ha complessit\`a $O(8)$, in quanto vi possono essere al massimo 8 vicini considerando orizzontale, verticale e diagonale.
+      \item La complessit\`a totale della fase 1 \`e quindi $O(N \times M)$.
+    \end{itemize}
+
+    \item \textbf{Fase 2: Formazione dei cluster}
+    \begin{itemize}
+        \item Il server avvia l'algoritmo per formare i cluster, scorrendo l'immagine da sinistra a destra e dall'alto verso il basso.
+        \item Per ogni nodo non ancora visitato, viene avviato un algoritmo di scoperta che include tutti i nodi adiacenti con lo stesso colore.
+        \item La complessit\`a dell'algoritmo per ogni cluster \`e lineare rispetto al numero di nodi nel cluster, ossia $O(k)$, dove $k$ \`e il numero di nodi del cluster.
         \item Poiché ogni nodo dell'immagine viene visitato esattamente una volta, la complessit\`a totale della formazione dei cluster \`e $O(N \times M)$, dove $N \times M$ rappresenta il numero totale di nodi nell'immagine.
     \end{itemize}
 
-    \item \textbf{Fase 2: Scoperta dei cluster adiacenti}
+    \item \textbf{Fase 3: Scoperta dei cluster adiacenti}
     \begin{itemize}
         \item Dopo la formazione dei cluster, i leader inviano richieste ai propri nodi per verificare se i loro vicini appartengono a un altro cluster.
         \item Ogni nodo comunica solo con i suoi vicini immediati, il che implica una complessit\`a costante per ogni nodo, pari a $O(1)$.
         \item La complessit\`a totale della scoperta dei cluster adiacenti \`e anch'essa $O(N \times M)$, poiché ogni nodo partecipa al processo una sola volta.
     \end{itemize}
-    \newpage
+
     \item \textbf{Rete overlay e sincronizzazione finale}
     \begin{itemize}
         \item Una volta scoperti i cluster adiacenti, viene costruita una rete overlay tra i leader.
@@ -373,7 +316,6 @@ Di seguito viene riportata l'analisi della complessit\`a delle due fasi.
     \item \textbf{Conclusione sulla complessit\`a}
     \begin{itemize}
         \item La complessit\`a totale della fase di setup \`e dominata dal numero di nodi nell'immagine, quindi \`e $O(N \times M)$.
-        \item Questa complessit\`a si mantiene per la formazione dei cluster tramite BFS e la scoperta dei cluster adiacenti.
         \item Sebbene la costruzione della rete overlay abbia una complessit\`a aggiuntiva $O(C)$, essa \`e limitata rispetto al termine dominante $O(N \times M)$.
         \item Pertanto, la fase di setup risulta essere efficiente e scalabile, anche per immagini di grandi dimensioni.
     \end{itemize}
@@ -387,18 +329,20 @@ Il sistema \`e composto da due tipi principali di nodi:
 \begin{enumerate}
     \item \textbf{Nodi normali}: rappresentano i pixel dell'immagine e mantengono informazioni minime. Ogni nodo normale conosce:
     \begin{itemize}
+        \item L'id del proprio processo (\texttt{pid}).
         \item Le proprie coordinate \texttt{(x, y)} all'interno dell'immagine.
         \item Il proprio \texttt{leaderID}, che identifica il leader del cluster a cui appartiene.
+        \item La lista dei vicini fisici (\texttt{neighbors}).
     \end{itemize}
 
     \item \textbf{Nodi leader}: sono responsabili della gestione del cluster. Ogni nodo leader mantiene:
     \begin{itemize}
+        \item Le informazioni di se stesso in quanto nodo (\texttt{node}).
         \item Le proprie coordinate \texttt{(x, y)} all'interno dell'immagine.
         \item Il colore del cluster (\texttt{color}).
-        \item La \texttt{lista dei nodi leader} dei cluster adiacenti nel grafo overlay.
-        \item L'identificatore del server (\texttt{serverID}).
-        \item L'ultimo evento che il nodo ha gestito e il suo rispettivo timestamp (serve per gestire i casi di concorrenza).
-        \item La lista \texttt{cluster\_nodes}, ossia i nodi del cluster di cui il leader \`e collegato direttamente.
+        \item L'ultimo evento \texttt{last\_event} che il nodo ha gestito (i.e. cambio colore o merge) con il relativo timestamp.
+        \item La lista dei cluster adiancenti (\texttt{adj\_clusters}).
+        \item La lista \texttt{cluster\_nodes} di tutti i nodi del cluster, compreso s\`e stesso.
     \end{itemize}
 \end{enumerate}
 
@@ -686,7 +630,7 @@ Inoltre, l'orologio logico di Lamport risulterebbe problematico per un ordinamen
 
 \paragraph{Limitazioni dell'approccio}
 
-Nonostante i vantaggi, questo approccio presenta la criticit\`a di introdurre un singolo punto di fallimento nel sistema: il time-server centrale. Se il time-server dovesse fallire o diventare non raggiungibile, gli orologi dei nodi non verrebbero pi\`u sincronizzati con esso, creando il rischio di presentare divergenze tra gli orologi dei nodi, i quali causerebbero possibili inconsistenze nell'ordinamento delle operazioni. Questo problema potrebbe compromettere la correttezza del sistema e richiedere meccanismi di tolleranza ai guasti o la presenza di server di tempo ridondanti per garantire la continuit\`a del servizio.
+Nonostante i vantaggi, questo approccio presenta la criticit\`a d'introdurre un singolo punto di fallimento nel sistema: il time-server centrale. Se il time-server dovesse fallire o diventare non raggiungibile, gli orologi dei nodi non verrebbero pi\`u sincronizzati con esso, creando il rischio di presentare divergenze tra gli orologi dei nodi, i quali causerebbero possibili inconsistenze nell'ordinamento delle operazioni. Questo problema potrebbe compromettere la correttezza del sistema e richiedere meccanismi di tolleranza ai guasti o la presenza di server di tempo ridondanti per garantire la continuit\`a del servizio.
 
 \newpage
 \subsection{Gestione della consistenza}\label{sec:gestione_consistenza}
