@@ -116,7 +116,7 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
         %% Handles {FromNode, node_already_visited}
         %% @doc Indicates that a node has already been configured.
         %% @param FromNode The node that has already been configured.
-        {FromNode, node_already_visited} ->
+        {_FromNode, node_already_visited} ->
             case Nodes of
                 [] -> % All nodes configured; proceed to Phase 2
                     start_phase2_for_all_leaders(
@@ -170,23 +170,23 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
 
             % Retrieve existing LeaderInfo
             LeaderInfo = maps:get(LeaderPid, LeadersData, #{color => undefined, adjacent_clusters => [], nodes => []}),
-            io:format("Before update: LeaderInfo for ~p: ~p~n", [LeaderPid, LeaderInfo]),
+            % io:format("Before update: LeaderInfo for ~p: ~p~n", [LeaderPid, LeaderInfo]),
 
             % Update the color in LeaderInfo
             LeaderInfo1 = maps:put(color, Color, LeaderInfo),
-            io:format("After color update: LeaderInfo1: ~p~n", [LeaderInfo1]),
+            % io:format("After color update: LeaderInfo1: ~p~n", [LeaderInfo1]),
 
             % Update the adjacent clusters in LeaderInfo
             LeaderInfo2 = maps:put(adjacent_clusters, AdjC, LeaderInfo1),
-            io:format("After adjClusters update: LeaderInfo2: ~p~n", [LeaderInfo2]),
+            % io:format("After adjClusters update: LeaderInfo2: ~p~n", [LeaderInfo2]),
 
             % Update the nodes in LeaderInfo
             UpdatedLeaderInfo = maps:put(nodes, ValidNodesInCluster, LeaderInfo2),
-            io:format("Final UpdatedLeaderInfo: ~p~n", [UpdatedLeaderInfo]),
+            % io:format("Final UpdatedLeaderInfo: ~p~n", [UpdatedLeaderInfo]),
 
             % Update LeadersData with the new LeaderInfo
             UpdatedLeadersData = maps:put(LeaderPid, UpdatedLeaderInfo, LeadersData),
-            io:format("UpdatedLeadersData: ~p~n", [UpdatedLeadersData]),
+            % io:format("UpdatedLeadersData: ~p~n", [UpdatedLeadersData]),
 
             % Save to JSON and write to file
             JsonData = save_leader_configuration_json(UpdatedLeadersData),
@@ -213,6 +213,28 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
         %% - Updates LeadersData by removing dead leaders and promoting new ones where needed.
         LeaderPids = maps:keys(LeadersData),
         DeadLeaders = [Pid || Pid <- LeaderPids, not erlang:is_process_alive(Pid)],
+
+        %% Invio del messaggio {still_leader} a ogni leader attivo
+        AliveLeaders = lists:subtract(LeaderPids, DeadLeaders),
+        lists:foreach(
+            fun(LeaderPid) ->
+                LeaderPid ! {still_leader, self()}
+            end,
+            AliveLeaders
+        ),
+
+        %% Raccolta delle risposte dai leader
+        Responses = collect_leader_responses(AliveLeaders, [], 1000), % Attende fino a 1000 ms
+
+        %% Identifica i leader che non sono più leader
+        NotLeaders = [LeaderPid || {LeaderPid, false} <- Responses],
+
+        %% Identifica i leader che non hanno risposto
+        RespondedLeaderPids = [LeaderPid || {LeaderPid, _} <- Responses],
+        NonRespondingLeaders = lists:subtract(AliveLeaders, RespondedLeaderPids),
+
+        %% Combina i leader morti e quelli che non sono più leader
+        _DefunctLeaders = DeadLeaders ++ NotLeaders ++ NonRespondingLeaders,
 
         UpdatedLeadersData = lists:foldl(
             fun(DeadPid, AccLeadersData) ->
@@ -328,6 +350,19 @@ server_loop(Nodes, ProcessedNodes, LeadersData, StartSystemPid) ->
         server_loop(Nodes, ProcessedNodes, UpdatedLeadersData, StartSystemPid)
 
     end.
+
+collect_leader_responses(_LeaderPids, AccResponses, 0) ->
+    AccResponses;
+collect_leader_responses(LeaderPids, AccResponses, Timeout) ->
+    receive
+        {still_leader_response, LeaderPid, IsStillLeader} ->
+            collect_leader_responses(LeaderPids, [{LeaderPid, IsStillLeader} | AccResponses], Timeout)
+    after 100 ->
+        %% Riduce il timeout di 100 ms
+        NewTimeout = Timeout - 100,
+        collect_leader_responses(LeaderPids, AccResponses, NewTimeout)
+    end.
+
 
 notify_adjacent_clusters_to_remove_cluster(AdjacentClusters, DeadLeaderPid) ->
     % Estrae i LeaderID dai cluster adiacenti e rimuove i duplicati

@@ -1,3 +1,5 @@
 {
-"pid": "<0.90.0>", "x": 2, "y": 4, "parent": "<0.84.0>", "children": [], "time": "undefined", "leader_id": "<0.84.0>", "neighbors": []
-}
+"leader_id": "<0.90.0>", "color": "green", "server_id": "<0.79.0>", "adj_clusters": [{"pid": "<0.113.0>", "color": "purple", "leader_id": "<0.113.0>"},{"pid": "<0.112.0>", "color": "red", "leader_id": "<0.91.0>"},{"pid": "<0.111.0>", "color": "blue", "leader_id": "<0.111.0>"},{"pid": "<0.110.0>", "color": "red", "leader_id": "<0.103.0>"},{"pid": "<0.106.0>", "color": "red", "leader_id": "<0.91.0>"},{"pid": "<0.103.0>", "color": "red", "leader_id": "<0.103.0>"},{"pid": "<0.99.0>", "color": "purple", "leader_id": "<0.93.0>"},{"pid": "<0.98.0>", "color": "red", "leader_id": "<0.91.0>"},{"pid": "<0.96.0>", "color": "blue", "leader_id": "<0.96.0>"},{"pid": "<0.91.0>", "color": "red", "leader_id": "<0.91.0>"},{"pid": "<0.89.0>", "color": "yellow", "leader_id": "<0.89.0>"},{"pid": "<0.84.0>", "color": "purple", "leader_id": "<0.83.0>"},{"pid": "<0.83.0>", "color": "purple", "leader_id": "<0.83.0>"},{"pid": "<0.82.0>", "color": "blue", "leader_id": "<0.82.0>"}], "nodes_in_cluster": ["<0.104.0>","<0.105.0>","<0.97.0>","<0.90.0>"],
+"node": {
+"x": 2, "y": 4, "parent": "<0.79.0>", "children": [], "time": "undefined", "leader_id": "<0.90.0>", "pid": "<0.90.0>", "neighbors": []
+}}

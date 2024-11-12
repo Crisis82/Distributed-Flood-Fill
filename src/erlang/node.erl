@@ -371,38 +371,45 @@ handle_messages_leader(Leader) ->
                             handle_merge_request(UpdatedLeader, LeaderID, Event)
                     end;
 
+                {still_leader, FromPid} ->
+                    %% Il leader risponde indicando che è ancora un leader
+                    FromPid ! {still_leader_response, self(), true},
+                    handle_messages_leader(Leader);
 
+                {update_nodes_in_cluster, NodesInCluster, NewLeaderID, NewColor} ->
+                    Node = Leader#leader.node,
+                    Neighbors = Node#node.neighbors,
 
+                    UpdatedNeighbors = lists:map(
+                        fun({NeighborPid, _NeighborColor, _NeighborLeaderID} = Neighbor) ->
+                            case lists:member(NeighborPid, NodesInCluster) of
+                                true ->
+                                    % io:format("Updating neighbor ~p with new leader ~p and color ~p.~n", [
+                                    %     NeighborPid, NewLeaderID, NewColor
+                                    % ]),
+                                    {NeighborPid, NewColor, NewLeaderID};
+                                false ->
+                                    Neighbor
+                            end
+                        end,
+                        Neighbors
+                    ),
 
+                    UpdatedNode = Node#node{neighbors = UpdatedNeighbors},
+                    UpdatedLeader = Leader#leader{node = UpdatedNode},
 
+                    handle_messages_leader(UpdatedLeader);
 
-            {update_nodes_in_cluster, NodesInCluster, NewLeaderID, NewColor} ->
-                Node = Leader#leader.node,
-                Neighbors = Node#node.neighbors,
+                    _Other ->
+                        % Unhandled messages
+                        handle_messages_leader(Leader)
+            after 5000 ->
+                %% Nessun messaggio ricevuto entro 5000 ms, invio aggiornamenti periodici
+                io:format("~p : Aggiorno i miei adjCLuster sui miei nodi (operazione periodica)~n", [self()]),
+                operation:send_periodic_updates(Leader),
+                %% Continua il loop
+                handle_messages_leader(Leader)
 
-                UpdatedNeighbors = lists:map(
-                    fun({NeighborPid, _NeighborColor, _NeighborLeaderID} = Neighbor) ->
-                        case lists:member(NeighborPid, NodesInCluster) of
-                            true ->
-                                % io:format("Updating neighbor ~p with new leader ~p and color ~p.~n", [
-                                %     NeighborPid, NewLeaderID, NewColor
-                                % ]),
-                                {NeighborPid, NewColor, NewLeaderID};
-                            false ->
-                                Neighbor
-                        end
-                    end,
-                    Neighbors
-                ),
-
-                UpdatedNode = Node#node{neighbors = UpdatedNeighbors},
-                UpdatedLeader = Leader#leader{node = UpdatedNode},
-
-                handle_messages_leader(UpdatedLeader);
-
-                _Other ->
-                    % Unhandled messages
-                    handle_messages_leader(Leader)
             end
     end.
 
@@ -462,6 +469,11 @@ handle_node_messages(Node) ->
                     UpdatedNode = Node#node{leaderID = NewLeader},
                     handle_node_messages(UpdatedNode);
 
+                {leader_update_periodic, NewLeader} ->
+                    % Update the node's leader ID
+                    UpdatedNode = Node#node{leaderID = NewLeader},
+                    handle_node_messages(UpdatedNode);
+
                 {get_leader_info, FromPid} ->
                     Node#node.leaderID ! {get_leader_info, FromPid},
                     handle_node_messages(Node);
@@ -482,6 +494,11 @@ handle_node_messages(Node) ->
                 
                 {color_adj_update, FromPid, Color, Nodes_in_Cluster} ->
                     Node#node.leaderID ! {color_adj_update, FromPid, Color, Nodes_in_Cluster};
+
+                {still_leader, FromPid} ->
+                    %% Il nodo risponde indicando che non è più un leader
+                    FromPid ! {still_leader_response, self(), false},
+                    handle_node_messages(Node);
 
                 _Other ->
                     Node#node.leaderID ! _Other,
@@ -591,7 +608,7 @@ wait_for_leader_to_become_node(Leader, LeaderID, NewEvents) ->
             lists:foreach(
                 fun(NodePid) ->
                     io:format("~p : Sending leader_update to ~p with new leader ~p.~n", [self(), NodePid, LeaderID]),
-                    NodePid ! {leader_update, LeaderID}
+                    NodePid ! {leader_update_periodic, LeaderID}
                 end,
                 Leader#leader.nodes_in_cluster
             ),

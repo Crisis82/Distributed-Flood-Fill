@@ -12,13 +12,9 @@ N=$1
 M=$2
 FROM_FILE=$3
 
-# Imposta la porta che desideri utilizzare (sostituisci con la porta corretta se nota)
-PORTA=8080
-
-# Controlla se la porta è occupata e termina il processo se necessario
-if lsof -i :$PORTA >/dev/null; then
-    echo "La porta $PORTA è già in uso. Terminando il processo sulla porta."
-    sudo fuser -k $PORTA/tcp
+# Elimina il file PORT.txt se esiste da una precedente esecuzione
+if [ -f ../config/PORT.txt ]; then
+    rm ../config/PORT.txt
 fi
 
 # Crea la directory beam_files se non esiste
@@ -27,5 +23,5 @@ mkdir -p ../beam_files
 # Compila e salva i file .beam in beam_files
 erlc -o ../beam_files ../erlang/*.erl
 
-# Avvia la shell Erlang ed esegui il comando start_system:start(N, M, FROM_FILE)
+# Avvia la shell Erlang ed esegui il comando start_system:start(N, M, FROM_FILE) in background
 erl -pa ../beam_files -eval "start_system:start($N, $M, $FROM_FILE)."

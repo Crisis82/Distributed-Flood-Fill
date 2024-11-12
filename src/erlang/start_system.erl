@@ -1,3 +1,5 @@
+-module(start_system).
+
 %% --------------------------------------------------------------------
 %% Module: start_system
 %% Description:
@@ -28,7 +30,6 @@
 %% and neighbor configuration, and should be called with desired grid dimensions.
 %% --------------------------------------------------------------------
 
--module(start_system).
 -export([start/3]).
 -include("includes/node.hrl").
 
@@ -55,7 +56,7 @@ load_colors_from_file(Filename) ->
         {ok, BinaryData} ->
             Lines = binary:split(BinaryData, <<"\n">>, [global]),
             [binary_to_atom(Line, utf8) || Line <- Lines, Line =/= <<>>];
-        {error, Reason} ->
+        {error, _Reason} ->
             []
     end.
 
@@ -225,7 +226,7 @@ ack_loop(_, 0) ->
     io:format("All acknowledgments received.~n~n~n");
 ack_loop(Nodes, RemainingACKs) ->
     receive
-        {ack_neighbors, Pid} ->
+        {ack_neighbors, _Pid} ->
             ack_loop(Nodes, RemainingACKs - 1)
     end.
 

@@ -62,6 +62,7 @@ from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
 import time
 from IPython.display import Image
 import argparse
+from datetime import datetime
 
 # Path del notebook
 notebook_path = "history_log.ipynb"
@@ -211,7 +212,7 @@ def draw_matrix(output_path=IMG_PATH):
     
     nodes_data = load_nodes_data()
     
-    output_path = f"static/default_test/snapshots/matrix_{time.strftime('%Y%m%d_%H%M%S')}.png"
+    output_path = os.path.join(snapshots_folder, f"matrix_{time.strftime('%Y%m%d_%H%M%S')}.png")
     print(f"Disegno matrice in {output_path}!")
     
     
@@ -272,7 +273,7 @@ def draw_matrix(output_path=IMG_PATH):
     
     # Salva l'immagine della matrice
     fig.savefig(output_path, bbox_inches='tight', pad_inches=0)
-    fig.savefig("static/matrix.png", bbox_inches='tight', pad_inches=0)
+    fig.savefig(IMG_PATH, bbox_inches='tight', pad_inches=0)
     fig.clear()
     
     # Logga il cambiamento nel notebook solo se l'immagine è stata creata
@@ -565,10 +566,12 @@ def send_color_change_request(node_id, color):
         print("Errore: node_id è None, impossibile inviare la richiesta")
         return False
 
+    timestamp = datetime.now()
+
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect(('localhost', PORT))  # Usa la variabile PORT passata dalla riga di comando
-            message = f"change_color,{node_id},{color}"
+            message = f"change_color,{node_id},{color},{timestamp.hour},{timestamp.minute},{timestamp.second}"
             print(f"Inviando il messaggio: {message}")
             s.sendall(message.encode('utf-8'))
             response = s.recv(1024).decode('utf-8')
@@ -609,27 +612,49 @@ def run_server():
     socketio.run(app, debug=True)
 
 # Funzione per eliminare tutti i file nella cartella snapshots
-def clear_snapshots_folder(folder_path="static/default_test/snapshots"):
-    if os.path.exists(folder_path):
-        for filename in os.listdir(folder_path):
-            file_path = os.path.join(folder_path, filename)
+def clear_snapshots_folder():
+    if os.path.exists(snapshots_folder):
+        for filename in os.listdir(snapshots_folder):
+            file_path = os.path.join(snapshots_folder, filename)
             try:
                 if os.path.isfile(file_path):
                     os.remove(file_path)
             except Exception as e:
                 print(f"Errore durante l'eliminazione del file {file_path}: {e}")
     else:
-        os.makedirs(folder_path)  # Crea la cartella se non esiste
+        os.makedirs(snapshots_folder)  # Crea la cartella se non esiste
 
 # Configura gli argomenti della riga di comando
 parser = argparse.ArgumentParser(description="Server per gestione della matrice e cambio colori")
 parser.add_argument('--port', type=int, default=8080, help="Porta su cui comunicare con il server Erlang")
 parser.add_argument('--debug', type=bool, default=False, help="Debug Mode")
+parser.add_argument('--leaders_file', type=str, default="leaders_data.json", help="Percorso del file JSON con i dati dei leader")
+parser.add_argument('--nodes_file', type=str, default="nodes_data.json", help="Percorso del file JSON con i dati dei nodi")
+parser.add_argument('--img_path', type=str, default="static/matrix.png", help="Percorso per salvare l'immagine della matrice")
+parser.add_argument('--notebook_path', type=str, default="history_log.ipynb", help="Percorso per il file notebook di log")
+parser.add_argument('--snapshots_folder', type=str, default="static/default_test/snapshots", help="Cartella per salvare le immagini snapshot")
+
 args = parser.parse_args()
 
-# Variabile porta basata sull'argomento della riga di comando
+# Variabili basate sugli argomenti della riga di comando
 PORT = args.port
 DEBUG_MODE = args.debug
+LEADERS_FILE = args.leaders_file
+NODES_FILE = args.nodes_file
+IMG_PATH = args.img_path
+notebook_path = args.notebook_path
+snapshots_folder = args.snapshots_folder
+
+# Stampa degli argomenti in modo formattato
+print("\n========= Configurazione del Server =========")
+print(f"Porta:\t\t\t{PORT}")
+print(f"Debug Mode:\t\t{DEBUG_MODE}")
+print(f"File dei Leader:\t{LEADERS_FILE}")
+print(f"File dei Nodi:\t\t{NODES_FILE}")
+print(f"Percorso Immagine:\t{IMG_PATH}")
+print(f"Percorso Notebook:\t{notebook_path}")
+print(f"Cartella Snapshots:\t{snapshots_folder}")
+print("=============================================\n")
 
 
 # Avvio del server

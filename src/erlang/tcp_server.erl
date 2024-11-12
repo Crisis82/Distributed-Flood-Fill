@@ -1,3 +1,5 @@
+-module(tcp_server).
+
 %% --------------------------------------------------------------------
 %% Module: tcp_server
 %% Description:
@@ -25,7 +27,6 @@
 %% either by changing node colors or terminating specific nodes based on client input.
 %% --------------------------------------------------------------------
 
--module(tcp_server).
 -export([start/0, listen/1, loop/1]).
 
 -define(palette, [red, green, blue, yellow, orange, purple, pink, brown, black, white]).
@@ -47,10 +48,19 @@ start() ->
     spawn(fun() -> 
         {ok, ListenSocket} = gen_tcp:listen(0, [binary, {packet, 0}, {active, false}]),
         {ok, Port} = inet:port(ListenSocket),
+        
+        % Stampa la porta e il comando da eseguire
         io:format("Server listening on port ~p~n", [Port]),
-        io:format("Command to run: ~n python3 grid_visualizer.py --debug True --port ~p", [Port]),
+        io:format("Command to run: ~n python3 grid_visualizer.py --debug True --port ~p~n", [Port]),
+        
+        % Salva la porta in PORT.txt
+        file:write_file("../config/PORT.txt", integer_to_list(Port)),
+
+        % Avvia il listener Erlang
         listen(ListenSocket)
     end).
+
+
 
 %% --------------------------------------------------------------------
 %% Function: listen/1
@@ -137,7 +147,7 @@ handle_message(["kill", IdStr, HH_str, MM_str, SS_str], Socket) ->
     case convert_to_pid(IdStr) of
         {ok, Pid} ->
             Timestamp = parse_time(HH_str, MM_str, SS_str),
-            Event = event:new_with_timestamp(kill, undefined, Pid, Timestamp),
+            _Event = event:new_with_timestamp(kill, undefined, Pid, Timestamp),
             Pid ! {kill},
             gen_tcp:send(Socket, "ok");
         {error, _} ->

@@ -30,7 +30,9 @@
 %% communication and robust management of clusters in the system.
 
 % color change
--export([change_color/2]).
+-export([change_color/2,
+        send_periodic_updates/1,
+        broadcast_leader_update/1]).
 
 % merge utilities
 -export([
@@ -64,25 +66,45 @@
 %% Postconditions:
 %% - Updates the leader's color and initiates merges with adjacent clusters of the same color.
 change_color(Leader, Event) ->
+    UpdatedLeader = do_change_color(Leader, Event),
+    
+    % Send updated color information to adjacent clusters
+    lists:foreach(
+        fun({_PID, _NeighborColor, OtherLeaderID}) ->
+            io:format("Sending color update to ~p from ~p: color=~p, nodes_in_cluster=~p~n",
+                [OtherLeaderID, self(), UpdatedLeader#leader.color, UpdatedLeader#leader.nodes_in_cluster]),
+            OtherLeaderID ! {color_adj_update, self(), UpdatedLeader#leader.color,
+                UpdatedLeader#leader.nodes_in_cluster}
+        end,
+        UpdatedLeader#leader.adjClusters
+    ),
+    
+    % Notify the server about the color change completion
+    UpdatedLeader#leader.serverID ! {change_color_complete, self(), UpdatedLeader},
+    UpdatedLeader.
+
+
+
+do_change_color(Leader, Event) ->
     Color = Event#event.color,
     ColorAtom = utils:normalize_color(Color),
-
-    %% Update the color and last event of the leader
+    
+    % Update the color and last event of the leader
     UpdatedLeader1 = Leader#leader{color = ColorAtom, last_event = Event},
-
+    
     CurrentLeaderID = Leader#leader.node#node.leaderID,
-
+    
     % Gather adjacent clusters with the same color but a different leader ID
     SameColorAdjClusters = utils:unique_leader_clusters(
         [{NeighborPid, NeighborColor, LeaderID}
-         || {NeighborPid, NeighborColor, LeaderID} <- Leader#leader.adjClusters,
+         || {NeighborPid, NeighborColor, LeaderID} <- UpdatedLeader1#leader.adjClusters,
             NeighborColor == ColorAtom,
             LeaderID =/= CurrentLeaderID]
     ),
-
+    
     % Extract LeaderIDs from clusters with the same color
     LeaderIDs = [LeaderID || {_, _, LeaderID} <- SameColorAdjClusters],
-
+    
     UpdatedLeader2 =
         case SameColorAdjClusters of
             [] ->
@@ -92,21 +114,23 @@ change_color(Leader, Event) ->
                 UpdatedLeaderWithFlag = UpdatedLeader1#leader{merge_in_progress = true},
                 merge_adjacent_clusters(SameColorAdjClusters, UpdatedLeaderWithFlag, LeaderIDs, Event)
         end,
-
-    % Send updated color information to adjacent clusters
-    lists:foreach(
-        fun({_PID, _NeighborColor, OtherLeaderID}) ->
-            io:format("Sending color update to ~p from ~p: color=~p, nodes_in_cluster=~p~n",
-                [OtherLeaderID, self(), UpdatedLeader2#leader.color, UpdatedLeader2#leader.nodes_in_cluster]),
-            OtherLeaderID ! {color_adj_update, self(), UpdatedLeader2#leader.color,
-                UpdatedLeader2#leader.nodes_in_cluster}
-        end,
-        UpdatedLeader2#leader.adjClusters
+    
+    % Check again for adjacent clusters with the same color
+    MoreSameColorAdjClusters = utils:unique_leader_clusters(
+        [{NeighborPid, NeighborColor, LeaderID}
+         || {NeighborPid, NeighborColor, LeaderID} <- UpdatedLeader2#leader.adjClusters,
+            NeighborColor == UpdatedLeader2#leader.color,
+            LeaderID =/= UpdatedLeader2#leader.node#node.leaderID]
     ),
-
-    % Notify the server about the color change completion
-    UpdatedLeader2#leader.serverID ! {change_color_complete, self(), UpdatedLeader2},
-    UpdatedLeader2.
+    
+    case MoreSameColorAdjClusters of
+        [] ->
+            % No more clusters to merge, return the updated leader
+            UpdatedLeader2;
+        _ ->
+            % Recursively call do_change_color with the updated leader
+            do_change_color(UpdatedLeader2, Event)
+    end.
 
 
 %% ------------------
@@ -221,6 +245,42 @@ handle_color_adj_update(Leader, FromPid, Color, Nodes_in_Cluster) ->
     % Return the updated leader
     UpdatedLeader.
 
+send_periodic_updates(Leader) ->
+    AdjClusters = Leader#leader.adjClusters,
+    % LeaderID = Leader#leader.node#node.leaderID,
+    NodesInCluster = Leader#leader.nodes_in_cluster,
+    Color = Leader#leader.color,
+
+    % Send updated color information to adjacent clusters
+    lists:foreach(
+        fun({_PID, _NeighborColor, OtherLeaderID}) ->
+            io:format("Sending color update to ~p from ~p: color=~p, nodes_in_cluster=~p~n",
+                [OtherLeaderID, self(), Color, NodesInCluster]),
+            
+            OtherLeaderID ! {color_adj_update, self(), Color,
+                NodesInCluster}
+        
+        end,
+        AdjClusters
+    ).
+
+%% @doc Sends a leader update to all nodes in the cluster, setting the leader to self.
+%% @spec broadcast_leader_update(#leader{}) -> ok
+broadcast_leader_update(Leader) ->
+    LeaderID = Leader#leader.node#node.leaderID,
+    NodesInCluster = Leader#leader.nodes_in_cluster,
+
+    % Exclude the leader's own PID from the list if necessary
+    NodesToUpdate = lists:filter(fun(NodePid) -> NodePid =/= LeaderID end, NodesInCluster),
+
+    % Send the leader update message to each node
+    lists:foreach(
+        fun(NodePid) ->
+            NodePid ! {leader_update_periodic, LeaderID}
+        end,
+        NodesToUpdate
+    ),
+    ok.
 
 
 %% Updates the color and leader ID of nodes in the adjacency list
@@ -310,3 +370,5 @@ promote_to_leader(Node, Color, ServerPid, NodesInCluster, AdjacentClusters) ->
         nodes_in_cluster = NodesInCluster
     },
     Leader.
+
+
