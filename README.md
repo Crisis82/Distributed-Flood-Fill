@@ -25,11 +25,7 @@ Questo progetto implementa un sistema distribuito per la gestione e visualizzazi
 
 #### Frontend (Python)
 
-- **`server.py`**: Avvia il server Flask che fornisce l'interfaccia utente e gestisce le richieste di cambio colore.
 - **`grid_visualizer.py`**: Implementa la visualizzazione grafica della griglia e si connette tramite WebSocket per aggiornare in tempo reale.
-- **`matrix_utils.py`**: Funzioni di supporto per gestire colori e calcoli per la visualizzazione.
-- **`change_color_requests.py`**: Gestisce l'invio delle richieste di cambio colore dal frontend.
-- **`notebook_logger.py`**: Registra i cambiamenti di colore nel file Jupyter `history_log.ipynb`.
 
 ### Struttura dei File
 
