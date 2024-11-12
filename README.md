@@ -34,7 +34,6 @@ Il sistema utilizza diversi file di log e di dati per mantenere lo stato dei nod
 - **`nodes_data.json`**: Memorizza informazioni di base sui nodi (PID, coordinate, leaderID).
 - **`leaders_data.json`**: Memorizza informazioni sui leader dei cluster e sui cluster adiacenti.
 - **`server_log.txt`**: Log di tutte le operazioni effettuate dal server.
-- **`nodes_status.txt`**: Stato corrente di ciascun nodo (coordinate, colore, leaderID).
 - **`static/matrix.png`**: Immagine aggiornata della griglia dei nodi.
 
 ## Requisiti
@@ -50,91 +49,158 @@ Per installare tutte le dipendenze necessarie, esegui:
 ```bash
 pip install flask flask-socketio matplotlib watchdog numpy ipython nbformat psutil
 ```
-## Guida all'Uso
 
-### 1. Avviare il Sistema Erlang
+## Guida all'Uso del Sistema
 
-Prima di avviare il server Flask, assicurati di aver avviato il backend Erlang per gestire le richieste di cambio colore. Puoi avviarlo eseguendo lo script `compile_and_run.sh` con le dimensioni desiderate della matrice (esempio 5x5):
+Questa guida dettagliata ti accompagnerà nell’utilizzo del sistema distribuito per la gestione e visualizzazione della matrice di nodi. Di seguito troverai tutte le informazioni su come configurare e avviare i componenti necessari, compreso il backend in **Erlang** e il frontend in **Python/Flask**, e su come eseguire test automatici per verificarne il funzionamento.
 
-```bash
-./compile_and_run.sh 5 5 true
-```
+### Prerequisiti
 
-### 2. Avvio del Server Flask
+Prima di iniziare, assicurati di avere installato:
 
-Una volta attivato Erlang, avvia il server Flask che ospita l'interfaccia di gestione della matrice e permette le modifiche del colore.
+- **Erlang/OTP 24 o superiore**: necessario per eseguire il backend distribuito. Erlang è stato scelto per le sue capacità native di gestione della concorrenza e di tolleranza ai guasti, essenziali per garantire la consistenza e la resilienza del sistema distribuito.
+- **Python 3.7 o superiore**: richiesto per eseguire il frontend Flask e altre operazioni di supporto. Flask è stato selezionato per la sua semplicità e flessibilità, permettendo di costruire rapidamente un’interfaccia web reattiva e integrabile con Erlang attraverso comunicazioni TCP.
 
-```bash
-python grid_visualizer.py --port <PORTA> --debug <True/False>
-```
+### Istruzioni Passo-Passo
 
-### 3. Visualizzazione della Matrice
+1. **Avvio del Backend Erlang**
+    
+    Il backend in Erlang gestisce le operazioni distribuite sui nodi della matrice, inclusi i cambiamenti di colore e la sincronizzazione dello stato dei nodi. È progettato per supportare una gestione efficiente dei messaggi tra i nodi, consentendo di rilevare e recuperare eventuali fallimenti dei nodi e dei leader.
+    
+    - **Comando**:
+        
+        ```bash
+        ./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
+        ```
+        
+        - **`<ROWS> <COLUMNS>`**: Specifica le dimensioni della griglia (ad esempio, 7x7 per una griglia di 49 nodi). Questi valori definiscono la topologia del sistema, stabilendo quanti nodi indipendenti saranno gestiti dal backend.
+        - **`FROM_FILE`**: Flag per determinare se i colori dei nodi devono essere assegnati casualmente o caricati da un file (`True` per leggere da file). Questo consente flessibilità nel setup della griglia: puoi partire da una configurazione predefinita oppure generare una configurazione randomica per testare il comportamento del sistema.
+    
+    **Nota**: Lo script `compile_and_run.sh` si occupa di compilare il codice Erlang e avviare il backend, assegnando automaticamente una porta per la comunicazione con il server Flask. Questa separazione dei compiti tra script facilita la gestione dell'infrastruttura di rete e semplifica il debugging.
+    
+2. **Avvio del Server Flask**
+    
+    Il server Flask rappresenta il frontend dell’applicazione, gestendo l’interfaccia web che permette all’utente di interagire con la griglia e inviare comandi di cambio colore. Flask è integrato con Flask-SocketIO per aggiornamenti in tempo reale della griglia, così da riflettere immediatamente ogni modifica del backend.
+    
+    - **Comando**:
+        
+        ```bash
+        python3 grid_visualizer.py --debug True --port <PORTA>
+        ```
+        
+        - **`-debug`**: Impostato su `True` per l’output di debug, utile durante lo sviluppo e la risoluzione dei problemi. Può essere impostato su `False` in produzione per migliorare la sicurezza e le performance.
+        - **`-port <PORTA>`**: Porta assegnata automaticamente dal backend; sostituisci `<PORTA>` con il numero specificato dall’output di `compile_and_run.sh`.
+    
+    **Nota**: L'uso di Flask-SocketIO consente di mantenere sincronizzato il frontend con il backend in tempo reale. Ogni volta che un nodo cambia colore nel backend, l’interfaccia viene aggiornata automaticamente, offrendo un feedback visivo immediato per l’utente.
+    
+3. **Visualizzare la Matrice**
+    
+    Una volta avviati sia il backend che il frontend, puoi visualizzare la griglia e interagire con i nodi direttamente nel browser. Naviga all’indirizzo seguente:
+    
+    ```
+    http://localhost:<PORTA>
+    ```
+    
+    **Motivazione**: Centralizzare le operazioni sull’interfaccia web semplifica l’uso del sistema, rendendolo accessibile anche agli utenti meno esperti. La matrice, mostrata come griglia di nodi, riflette visivamente lo stato del sistema distribuito, facilitando il monitoraggio delle operazioni e dei cambiamenti.
+    
+4. **Interazione e Cambiamento di Colore dei Nodi**
+    
+    Nell’interfaccia web:
+    
+    - Seleziona un nodo.
+    - Scegli un nuovo colore dal menu.
+    - Conferma l’operazione.
+    
+    Ogni richiesta di cambio colore viene inoltrata dal frontend al backend, che si occupa di propagare il cambiamento in modo sicuro ed efficiente tra i nodi coinvolti. Questa propagazione utilizza i meccanismi di gestione della concorrenza di Erlang per garantire che ogni nodo riceva l’aggiornamento senza conflitti.
+    
+    **Nota**: Il sistema è stato progettato per supportare aggiornamenti di colore in modo atomico. L'implementazione assicura che anche in caso di cambi multipli simultanei, il sistema riesca a gestire correttamente i conflitti grazie a un modello di eventi ordinati per timestamp.
+    
 
-Apri il tuo browser e visita `http://localhost:<PORTA>` per visualizzare la matrice.
+---
 
-### 4. Cambiare il Colore dei Nodi
+## Automazione e Test
 
-Nell'interfaccia, seleziona il nodo che desideri cambiare e scegli il colore desiderato dal menu a tendina. Il server invierà la richiesta al backend Erlang e aggiornerà la visualizzazione in tempo reale.
+Per supportare scenari di testing complessi e verificare la stabilità del sistema in condizioni diverse, è possibile utilizzare script di automazione per generare configurazioni e operazioni casuali.
 
-## Dettagli dei Moduli Erlang
+### Generazione di Matrice con Colori e Operazioni Casuali
 
-### `start_system.erl`
+Utilizzando lo script `generate_changes_rand.py`, puoi creare una matrice con colori casuali e un set di operazioni di cambio colore casuali. Questo approccio è utile per simulare un’ampia varietà di scenari e testare la robustezza e la reattività del sistema in situazioni diverse.
 
-Modulo principale di setup del sistema:
+- **Comando**:
+    
+    ```bash
+    python3 generate_changes_rand.py --rows <ROWS> --columns <COLUMNS> --operations <NUMBER_OPERATIONS>
+    ```
+    
+    - **`-rows` e `-columns`**: Definiscono la dimensione della griglia, allineandola a quella del backend.
+    - **`-operations`**: Numero di cambi di colore casuali che verranno applicati durante il test. Ogni operazione è concepita per verificare la gestione dei cambiamenti distribuiti.
+    
+    **Note**:
+    
+    - Il file `colors.txt` generato da questo script può essere utilizzato nel comando `compile_and_run.sh` impostando `FROM_FILE=True` per testare configurazioni specifiche e ripetibili.
+    - Lo script permette di simulare carichi di lavoro realistici, essenziali per identificare eventuali colli di bottiglia o problematiche di consistenza.
 
-- Avvia il server e i nodi nella griglia specificata.
-- Assegna a ciascun nodo i vicini in base alla posizione.
-- Esegue il setup per il monitoraggio e la gestione dei nodi e leader.
+### Esecuzione di Test Automatici con `script.py`
 
-### `node.erl`
+Per verificare automaticamente l’intero ciclo operativo del sistema e confermare che il backend e il frontend rispondano correttamente a ciascun comando, utilizza lo script `script.py`.
 
-Definisce il comportamento di ogni nodo:
+- **Comando**:
+    
+    ```bash
+    python3 script.py
+    ```
+    Questo script avvia automaticamente una sequenza di operazioni e verifica che i cambiamenti vengano propagati correttamente nell’interfaccia e nei log di sistema.
+    
+    **Nota**: I test automatici sono fondamentali per assicurare la coerenza e l’affidabilità del sistema. Questo script consente di eseguire verifiche rapide e ripetute, facilitando il debug e garantendo un comportamento corretto del sistema in diverse condizioni.
+    
 
-- Risponde ai messaggi di cambio colore.
-- Comunica con altri nodi per le richieste di merge.
-- Gestisce lo stato di vicinato e sincronizzazione con il server.
+---
 
-### `server.erl`
+### Esecuzione in Shell Multiple
 
-Gestisce il coordinamento globale:
+Per supportare la gestione di sessioni multiple e facilitare la configurazione e l’esecuzione del sistema in ambienti di sviluppo, puoi usare più terminali (o shell) per avviare i componenti in parallelo.
 
-- Assegna vicini a ciascun nodo.
-- Supervisiona lo stato del sistema e gestisce le richieste di cambio colore globali.
-- Comunica con Flask per aggiornamenti in tempo reale.
+### Opzione 1: Due Shell (Uso Manuale)
 
-### `visualizer.erl`
+1. **Avvia il Backend Erlang**:
+    
+    ```bash
+    ./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
+    ```
+    
+2. **Avvia il Server Flask**:
+    
+    ```bash
+    python3 grid_visualizer.py --debug False --port <PORTA>
+    ```
+    
+    - Questa modalità è utile se si desidera controllare manualmente i componenti del sistema e verificare le interazioni.
 
-Interfaccia per il monitoraggio e visualizzazione:
+### Opzione 2: Tre Shell (Uso con Test Automatici)
 
-- Collega il sistema Erlang con il frontend.
-- Gestisce i WebSocket e invia aggiornamenti al server Flask.
+Questa configurazione permette di eseguire test automatici oltre al backend e al server Flask.
 
-### `tcp_server.erl`
+1. **Generare Operazioni Casuali** (opzionale, se vuoi testare con operazioni di cambio colore predefinite):
+    
+    ```bash
+    python3 generate_changes_rand.py --rows 7 --columns 7 --operations 10
+    ```
+    
+2. **Backend Erlang**:
+    
+    ```bash
+    ./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
+    ```
+    
+3. **Server Flask**:
+    
+    ```bash
+    python3 grid_visualizer.py --debug False --port 8080
+    ```
+    
+4. **Eseguire i Test Automatici**:
+    
+    Per avviare i test, specifica la porta di connessione nello script `generate_changes_rand.py`.
+    
 
-Server TCP che gestisce le richieste di cambio colore dal frontend:
-
-- Riceve richieste da Flask.
-- Interpreta e indirizza le richieste verso i nodi corrispondenti.
-
-### `utils.erl`
-
-Modulo di utilità:
-
-- Contiene funzioni per rimuovere duplicati, formattare JSON e normalizzare colori.
-- Gestisce operazioni comuni come controllo della validità dei PID e conversioni.
-
-## Comandi di Esempio
-
-### Per eseguire il server Flask:
-
-```bash
-python grind_visualizer.py --port 8080 --debug True
-```
-
-### Per generare una matrice di nodi e inizializzare i colori
-
-```bash
-python3 generate_changes_rand.py --rows 5 --columns 5 --operations 10
-
-```
-
+Questa configurazione permette di avviare un ambiente completo di testing automatizzato e monitoraggio, utile per verificare il comportamento del sistema in scenari realistici e per osservare la resilienza del sistema in condizioni di utilizzo intensivo.
