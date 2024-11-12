@@ -120,7 +120,7 @@ start(N, M, FromFile) ->
     ServerPid ! {start_setup, UpdatedNodes, self()},
 
     receive
-        {finih_setup, _LeaderIDs} -> tcp_server:start()
+        {finish_setup, _LeaderIDs} -> tcp_server:start()
     end.
 
 %% --------------------------------------------------------------------
