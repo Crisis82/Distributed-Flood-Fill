@@ -1,6 +1,28 @@
 -module(utils).
 
-% lists operations
+%% ------------------------------------------------------------------
+%% @module utils
+%% @description
+%% This module provides a set of utility functions for managing and processing data 
+%% related to clusters, nodes, and events in a distributed system. It includes:
+%% - List operations: Functions to remove duplicates, merge lists, and filter elements 
+%%   based on specific criteria, such as color or unique identifiers.
+%% - Formatting utilities: Functions for converting data, such as timestamps and colors, 
+%%   into specific formats or representations.
+%% - JSON handling: Functions for converting internal data structures into JSON format, 
+%%   and saving them to files for persistent storage and easy readability.
+%% - Logging: Utilities for recording system operations with timestamps, enhancing 
+%%   traceability and debugging.
+%% - Data backup: Functions to store data from nodes and leaders in a file-based format, 
+%%   supporting data persistence for recovery or auditing.
+%%
+%% Each function is designed with input validation, ensuring that data consistency and 
+%% integrity are maintained throughout distributed operations. These utilities enhance 
+%% modularity and maintainability by isolating common tasks into this shared module.
+%% ------------------------------------------------------------------
+
+
+% Exported functions for list operations
 -export([
     remove_duplicates/1,
     check_same_color/2,
@@ -10,7 +32,8 @@
     is_pid_list/1,
     unique_leader_clusters/1
 ]).
-% formatting
+
+% Exported functions for formatting utilities
 -export([
     format_time/1,
     format_timestamp/1,
@@ -18,58 +41,77 @@
     pid_to_string/1,
     atom_to_string/1
 ]).
-% JSON
+
+% Exported functions for JSON operations
 -export([
     save_leader_data_to_file/1,
     convert_adj_clusters/1,
     convert_node_list/1
 ]).
-% logging
+
+% Exported functions for logging
 -export([
-    log_operation/1,
-    reference/2,
-    get_reference/1,
-    coordinate_to_reference/2
+    log_operation/1
 ]).
-% data backup
+
+% Exported functions for data backup
 -export([
     save_data/1,
     save_node_data_to_file/1
 ]).
 
+% Include necessary record definitions
 -include("includes/node.hrl").
 -include("includes/event.hrl").
 
 %% ------------------
-%%
-%%  LISTS OPERATIONS
-%%
+%%    LISTS OPERATIONS
 %% ------------------
 
+%% Removes duplicate elements from a list.
+%% @param List A list of elements.
+%% @return A list with duplicates removed.
 remove_duplicates(List) ->
     lists:usort(List).
 
-%% Funzione per rimuovere duplicati in base al LeaderID
+%% Retrieves unique clusters by LeaderID.
+%% Preconditions: Clusters is a list of tuples {Pid, Color, LeaderID}.
+%% @param Clusters List of cluster data.
+%% @return A list of unique clusters by LeaderID.
 unique_leader_clusters(Clusters) ->
-    % Usa una mappa per tenere solo un cluster per LeaderID
     ClusterMap = maps:from_list(
         lists:map(fun({Pid, Color, LeaderID}) -> {LeaderID, {Pid, Color, LeaderID}} end, Clusters)
     ),
     maps:values(ClusterMap).
 
-%% Checks if there is an adjacent cluster with the same color
+%% Checks if any adjacent cluster has the same color.
+%% Preconditions: AdjClusters is a list of tuples {Pid, Color, LeaderID}.
+%% @param ColorToMatch The color to match.
+%% @param AdjClusters List of adjacent clusters.
+%% @return true if an adjacent cluster has the same color, false otherwise.
 check_same_color(ColorToMatch, AdjClusters) ->
     lists:member(ColorToMatch, [Color || {_, Color, _} <- AdjClusters, ColorToMatch =:= Color]).
 
-%% Returns the list of adjacents cluster with the same color
+%% Gets a list of adjacent clusters with the same color.
+%% Preconditions: AdjClusters is a list of tuples {Pid, Color, LeaderID}.
+%% @param ColorToMatch The color to match.
+%% @param AdjClusters List of adjacent clusters.
+%% @return A list of clusters with the matching color.
 get_same_color(ColorToMatch, AdjClusters) ->
     [Match || {_, Color, _} = Match <- AdjClusters, ColorToMatch =:= Color].
 
-%% Funzione di supporto per unire due liste di cluster adiacenti, evitando duplicati
+%% Joins two lists of adjacent clusters, removing duplicates.
+%% @param AdjClusters1 First list of adjacent clusters.
+%% @param AdjClusters2 Second list of adjacent clusters.
+%% @return A merged list of unique adjacent clusters.
 join_adj_clusters(AdjClusters1, AdjClusters2) ->
     lists:usort(AdjClusters1 ++ AdjClusters2).
 
-%% Funzione di supporto per unire due liste di PID, evitando duplicati
+%% Joins two lists of PIDs, ensuring no duplicates.
+%% Preconditions: Both lists should contain only PIDs.
+%% @param List1 First list of PIDs.
+%% @param List2 Second list of PIDs.
+%% @return A merged list of unique PIDs.
 join_nodes_list(List1, List2) ->
     % Verifica che entrambi gli input siano liste di PID
     SafeList1 =
@@ -85,81 +127,96 @@ join_nodes_list(List1, List2) ->
     % Rimuove i duplicati usando usort per ottenere una lista unica
     lists:usort(SafeList1 ++ SafeList2).
 
-%% Funzione di supporto per verificare se una lista contiene solo PID
+%% Checks if a list contains only PIDs.
+%% @param List The list to check.
+%% @return true if all elements are PIDs, false otherwise.
 is_pid_list(List) ->
     lists:all(fun erlang:is_pid/1, List).
 
 %% ------------------
-%%
 %%    FORMATTING
-%%
 %% ------------------
 
-%% Funzione di supporto per formattare il tempo in una stringa "HH:MM:SS"
+%% Formats a time tuple as "HH:MM:SS".
+%% Preconditions: Input should be a valid time tuple or 'undefined'.
+%% @param TimeTuple A tuple {Hour, Minute, Second} or undefined.
+%% @return Formatted time string or "undefined".
 format_time({Hour, Minute, Second}) ->
     io_lib:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]);
-format_time(undefined) ->
-    "undefined".
+format_time(undefined) -> "undefined".
 
-%% Funzione di supporto per formattare il timestamp in "HH:MM:SS"
+%% Formats a timestamp tuple as "HH:MM:SS".
+%% Preconditions: Input should be a valid timestamp tuple or 'undefined'.
+%% @param TimestampTuple A tuple {Hour, Minute, Second} or undefined.
+%% @return Formatted timestamp string or "undefined".
 format_timestamp({Hour, Minute, Second}) ->
     io_lib:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]);
-format_timestamp(undefined) ->
-    "undefined".
+format_timestamp(undefined) -> "undefined".
 
-%% Ensures the color is an atom. Converts to atom if it's a string.
+%% Ensures color is an atom, converting if necessary.
+%% @param Color The color to normalize.
+%% @return An atom representing the color.
 normalize_color(Color) when is_atom(Color) ->
     Color;
 normalize_color(Color) when is_list(Color) ->
     list_to_atom(Color).
 
-%% Funzione per convertire un PID in stringa
+%% Converts a PID to a string.
+%% Preconditions: Input should be a valid PID or 'undefined'.
+%% @param Pid The PID to convert.
+%% @return String representation of the PID or "undefined".
 pid_to_string(Pid) when is_pid(Pid) ->
     erlang:pid_to_list(Pid);
 pid_to_string(undefined) ->
     "undefined".
 
-%% Funzione per convertire un atomo in una stringa JSON-friendly
+%% Converts an atom to a JSON-friendly string.
+%% Preconditions: Input should be an atom.
+%% @param Atom The atom to convert.
+%% @return String representation of the atom.
 atom_to_string(Atom) when is_atom(Atom) -> atom_to_list(Atom);
 atom_to_string(Other) -> Other.
 
 %% ------------------
-%%
-%%      JSON
-%%
+%%    JSON
 %% ------------------
-%%
-%% Funzione per salvare i dati di Leader in un file JSON locale
+
+%% Saves leader data as JSON in a file.
+%% Preconditions: Leader must be a valid leader record with node, color, and serverID fields.
+%% @param Leader The leader data to save.
+%% @return none. The leader data is saved in the specified file path.
 save_leader_data_to_file(Leader) ->
     Node = Leader#leader.node,
-
-    % Costruisce il nome del file con la reference del Pid
-    Filename = io_lib:format("../DB/json/~p.json", [Node#node.pid]),
-
-    % Crea la cartella se non esiste
+    X = Node#node.x,
+    Y = Node#node.y,
+    Dir = io_lib:format("../DB/~p_~p/", [X, Y]),
+    Filename = lists:concat([Dir, "data.json"]),
     filelib:ensure_dir(Filename),
-
-    % Costruisci i dati JSON del leader e del nodo associato in formato stringa
+    TimeFormatted = format_time(Node#node.time),
     JsonData = io_lib:format(
-        "{\n\"leader_id\": \"~s\", \"color\": \"~s\", \"adj_clusters\": ~s, \"cluster_nodes\": ~s,\n" ++
-            "\"node\": {\n\"pid\": \"~s\", \"x\": ~p, \"y\": ~p, \"leader_id\": \"~s\", \"neighbors\": ~s\n}}",
+        "{\n\"leader_id\": \"~s\", \"color\": \"~s\", \"server_id\": \"~s\", \"adj_clusters\": ~s, \"nodes_in_cluster\": ~s,\n" ++
+            "\"node\": {\n\"x\": ~p, \"y\": ~p, \"parent\": \"~s\", \"children\": ~s, \"time\": ~p, \"leader_id\": \"~s\", \"pid\": \"~s\", \"neighbors\": ~s\n}}",
         [
             pid_to_string(Node#node.pid),
             atom_to_string(Leader#leader.color),
-            convert_adj_clusters(Leader#leader.adj_clusters),
-            convert_node_list(Leader#leader.cluster_nodes),
-            pid_to_string(Node#node.pid),
-            Node#node.x,
-            Node#node.y,
+            pid_to_string(Leader#leader.serverID),
+            convert_adj_clusters(Leader#leader.adjClusters),
+            convert_node_list(Leader#leader.nodes_in_cluster),
+            X, Y,
+            pid_to_string(Node#node.parent),
+            convert_node_list(Node#node.children),
+            TimeFormatted,
             pid_to_string(Node#node.leaderID),
+            pid_to_string(Node#node.pid),
             convert_adj_clusters(Node#node.neighbors)
         ]
     ),
-
     file:write_file(Filename, lists:flatten(JsonData)).
-% io:format("Dati di Leader (~p,~p) con PID ~p salvati in: ~s~n", [X, Y, self(), Filename]).
 
-%% Funzione helper per convertire la lista di cluster adiacenti in formato JSON-friendly
+%% Converts a list of adjacent clusters to JSON format.
+%% Preconditions: AdjClusters should be a list of tuples {Pid, Color, LeaderID}.
+%% @param AdjClusters List of adjacent clusters.
+%% @return JSON string representation of the adjacent clusters.
 convert_adj_clusters(AdjClusters) ->
     JsonClusters = [
         io_lib:format(
@@ -170,93 +227,74 @@ convert_adj_clusters(AdjClusters) ->
     ],
     "[" ++ string:join(JsonClusters, ",") ++ "]".
 
-%% Funzione helper per convertire la lista di nodi in formato JSON-friendly
+%% Converts a list of nodes to JSON format.
+%% Preconditions: Nodes should be a list of PIDs.
+%% @param Nodes List of node PIDs.
+%% @return JSON string representation of the node list.
 convert_node_list(Nodes) ->
     JsonNodes = [io_lib:format("\"~s\"", [pid_to_string(NodePid)]) || NodePid <- Nodes],
     "[" ++ string:join(JsonNodes, ",") ++ "]".
 
 %% ------------------
-%%
-%%      LOGGING
-%%
+%%    LOGGING
 %% ------------------
 
-%% Funzione per salvare l'operazione nel log con il timestamp passato come parametro
+%% Logs an operation with a timestamp.
+%% Preconditions: Event should be a record with a timestamp, type, color, and from fields.
+%% @param Event The event to log.
+%% @return none. The event is logged to the specified file path.
 log_operation(Event) ->
-    % Formatta il timestamp come stringa
     TimestampStr = format_timestamp(Event#event.timestamp),
-
-    % Crea il percorso per il file di log DB/logs/nodeX_Y.log
     Reference = get_reference(Event#event.from),
     LogFile = lists:flatten(io_lib:format("../DB/logs/~p.log", [Reference])),
-
-    % Assicurati che la directory esista
     filelib:ensure_dir(LogFile),
-
-    % Scrivi l'operazione nel file di log
     LogEntry = io_lib:format("~s: {~p, ~p, ~p}~n", [
         TimestampStr, Event#event.type, Event#event.color, Reference
     ]),
     file:write_file(LogFile, lists:flatten(LogEntry), [append]).
 
-% io:format("Operazione loggata: '~s: {~p, ~p, ~p}'~n", [TimestampStr, Event#event.type, Event#event.color, Reference]).
-
-reference(Node, Pid) ->
-    Reference = list_to_atom(
-        lists:flatten(
-            io_lib:format("node~p_~p", [Node#node.x, Node#node.y])
-        )
-    ),
-    register(Reference, Pid),
-    Reference.
-
+%% Retrieves a reference for a process.
+%% Preconditions: Pid must be a valid process ID.
+%% @param Pid The process ID to get the reference for.
+%% @return The registered name or reference of the process.
 get_reference(Pid) ->
     {_, Reference} = process_info(Pid, registered_name),
     Reference.
 
-coordinate_to_reference(X, Y) ->
-    list_to_atom(lists:flatten(io_lib:format("node~p_~p", [X, Y]))).
-
 %% ------------------
-%%
 %%    DATA BACKUP
-%%
 %% ------------------
 
+%% Saves either node or leader data to a file.
+%% Preconditions: NodeOrLeader must be either a node or leader record.
+%% @param NodeOrLeader The data to save.
+%% @return none. The data is saved in the specified file path.
 save_data(NodeOrLeader) ->
-    % Extract Node and Leader data accordingly
-    % io:format("SALVO I DATI~n"),
     case NodeOrLeader of
-        #node{} = Node ->
-            % Handle node data saving
-            save_node_data_to_file(Node);
-        _ ->
-            % Handle leader data saving
-            save_leader_data_to_file(NodeOrLeader)
+        #node{} = Node -> save_node_data_to_file(Node);
+        _ -> save_leader_data_to_file(NodeOrLeader)
     end.
 
+%% Saves node data as JSON in a file.
+%% Preconditions: Node should be a record with x, y, parent, children, time, leaderID, and neighbors fields.
+%% @param Node The node data to save.
+%% @return none. The node data is saved in the specified file path.
 save_node_data_to_file(Node) ->
-    % Get coordinates X and Y
     X = Node#node.x,
     Y = Node#node.y,
     Dir = io_lib:format("../DB/~p_~p/", [X, Y]),
     Filename = lists:concat([Dir, "data.json"]),
-
-    % Ensure the directory exists
     filelib:ensure_dir(Filename),
-
-    % Costruisci i dati JSON del nodo in formato stringa
     JsonData = io_lib:format(
-        "{\n\"pid\": \"~s\", \"x\": ~p, \"y\": ~p, \"leader_id\": \"~s\", \"neighbors\": ~s\n}",
+        "{\n\"pid\": \"~s\", \"x\": ~p, \"y\": ~p, \"parent\": \"~s\", \"children\": ~s, \"time\": \"~s\", \"leader_id\": \"~s\", \"neighbors\": ~s\n}",
         [
             pid_to_string(Node#node.pid),
-            X,
-            Y,
+            X, Y,
+            pid_to_string(Node#node.parent),
+            convert_node_list(Node#node.children),
+            format_time(Node#node.time),
             pid_to_string(Node#node.leaderID),
             convert_adj_clusters(Node#node.neighbors)
         ]
     ),
-
-    % Save the JSON data to the file
     file:write_file(Filename, lists:flatten(JsonData)).
-% io:format("Node data saved in: ~s~n", [Filename]).

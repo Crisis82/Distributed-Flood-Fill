@@ -1,3 +1,48 @@
+"""
+Matrix Visualization and Real-Time Color Management Server
+
+Description:
+This script creates a web server that provides real-time visualization and management of a grid of nodes.
+It uses Flask for the web server, Flask-SocketIO for WebSocket support, and Matplotlib for rendering the grid.
+The server interacts with an Erlang backend to manage nodes in the grid and update their colors in real-time.
+It allows users to change node colors directly from the web interface, which then propagates the changes to Erlang.
+
+Features:
+1. **Node Matrix Visualization**:
+   - Displays a grid of nodes, with each node colored based on its leader.
+   - Shows connections between adjacent nodes in the same cluster for easier visualization of relationships.
+   - Updates the grid automatically whenever there is a change in the leader data or every 30 seconds.
+
+2. **Real-Time Color Management**:
+   - Allows users to change node colors dynamically via the web interface.
+   - Communicates with the Erlang server over TCP to request color changes.
+   - Provides real-time updates using WebSocket to reflect changes without refreshing the page.
+
+3. **Logging and Snapshots**:
+   - Logs color changes in a Jupyter Notebook format (`history_log.ipynb`) for tracking changes over time.
+   - Saves snapshot images of the matrix with each update to a designated folder.
+
+File Structure:
+- `draw_matrix`: Generates the matrix image based on leader and node data.
+- `LeadersDataHandler`: Monitors leader data files for changes and updates the grid accordingly.
+- Flask Routes (`/`, `/matrix`, `/change_color`): 
+    - `/`: Main interface for the matrix display.
+    - `/matrix`: Serves the current matrix image.
+    - `/change_color`: Handles POST requests to change a node's color.
+- Utility functions for handling file operations, hashing data, logging to notebook, and color conversions.
+
+Usage:
+- Run the script with `python <filename>.py --port <PORT> --debug <DEBUG_MODE>` to start the server.
+- Configure `--port` to specify the port for communication with Erlang and `--debug` to enable debug mode.
+- Ensure Erlang server is running and accessible on the specified port.
+
+Dependencies:
+- Flask, Flask-SocketIO, Matplotlib, nbformat, Watchdog, IPython
+- Ensure these are installed in your environment.
+
+"""
+
+
 from flask import Flask, render_template_string, send_file, request, redirect, url_for
 from flask_socketio import SocketIO
 from matplotlib.figure import Figure

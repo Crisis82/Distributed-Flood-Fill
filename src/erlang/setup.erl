@@ -1,374 +1,254 @@
 -module(setup).
--export([setup_loop/2]).
+
+%% --------------------------------------------------------------------
+%% Module: setup
+%% Description:
+%% This module handles the initial setup phase for nodes in a distributed system.
+%% Specifically, it manages the propagation of setup messages between nodes, 
+%% establishing the environment and clustering structures. The module allows nodes 
+%% to identify their neighbors, assign a leader ID, and propagate setup requests to 
+%% form clusters based on specific color and leader attributes.
+%%
+%% Key Features:
+%% - Initiates setup by designating leaders and propagating the leader ID to connected nodes.
+%% - Collects information from adjacent nodes to form clusters.
+%% - Handles message propagation, ensuring nodes only respond if not already visited.
+%% - In Phase 2, finalizes cluster boundaries by identifying adjacent clusters for each leader.
+%%
+%% Functions:
+%% - `setup_loop/3`: Main loop to manage setup messages and node states.
+%% - `setup_loop_propagate/7`: Propagates setup messages to neighboring nodes to form clusters.
+%% - `wait_for_ack_from_neighbors/7`: Collects acknowledgments from neighbors to confirm 
+%%   successful message propagation.
+%% - `gather_adjacent_clusters/5`: Collects and filters unique leader IDs from neighboring clusters.
+%% - `gather_adjacent_nodes/3`: Retrieves adjacent nodes for a given cluster.
+%%
+%% Preconditions:
+%% - Each node must have an initial leader record and color assigned.
+%% - Neighboring relationships should be pre-defined for accurate propagation.
+%% - Nodes must have a unique PID to avoid conflicts during propagation.
+%%
+%% Postconditions:
+%% - Successfully organizes nodes into clusters with designated leaders.
+%% - Identifies and sets up adjacency information for each cluster.
+%% - Finalizes and logs the setup configuration for all nodes.
+%%
+%% Usage:
+%% This module is primarily used during the initial setup phase in a distributed system 
+%% where nodes need to organize into clusters, establish leaders, and identify neighboring clusters.
+%% --------------------------------------------------------------------
+
+
+-export([setup_loop/3]).
 -include("includes/node.hrl").
 
-%% Loop to setup the enviroment and the structures
-setup_loop(Leader, Visited) ->
-    % io:format("Sono il nodo (~p, ~p) con PID ~p e sono pronto per ricevere nuovi messaggi!!~n", [Leader#leader.node#node.x, Leader#leader.node#node.y, self()]),
-
+%% Primary loop for setting up the environment and node structures.
+%% @spec setup_loop(#leader{}, pid(), boolean()) -> no_return()
+%% @param Leader The leader record for the node undergoing setup.
+%% @param StartSystemPid PID of the system startup process.
+%% @param Visited Boolean flag indicating whether this node has already been visited.
+%%
+%% Preconditions:
+%% - `Leader` must be a valid leader record.
+%% - `StartSystemPid` is the PID of the initiating process.
+%% - `Visited` is false initially for unvisited nodes.
+%%
+%% Postconditions:
+%% - Continues the setup process by handling various setup-related messages.
+setup_loop(Leader, StartSystemPid, Visited) ->
+    Pid = self(),
     utils:save_data(Leader),
     receive
         {neighbors, Neighbors} ->
-            % io:format("Node (~p, ~p) received neighbors: ~p~n", [eader#leader.node#node.x, Leader#leader.node#node.y, Neighbors]),
-            % Update node state with neighbors and notify system
-            Pid = self(),
-            utils:reference(Leader#leader.node, Pid),
-            UpdatedNode = Leader#leader.node#node{
-                neighbors = Neighbors, leaderID = Pid, pid = Pid
-            },
+            %% Node receives neighbors, updates state, and acknowledges the system.
+            UpdatedNode = Leader#leader.node#node{neighbors = Neighbors, leaderID = Pid, pid = Pid},
             UpdatedLeader = Leader#leader{node = UpdatedNode},
+            StartSystemPid ! {ack_neighbors, self()},
+            setup_loop(UpdatedLeader, StartSystemPid, Visited);
 
-            % io:format(
-            %     "SETUP ~p : Sono il nodo (~p, ~p) con PID ~p e invio a il messaggio {ack_neighbors, ~p} a ~p~n",
-            %     [
-            %         self(),
-            %         Leader#leader.node#node.x,
-            %         Leader#leader.node#node.y,
-            %         Pid,
-            %         Pid,
-            %     ]
-            % ),
-
-            start ! {ack_neighbors, self()},
-
-            setup_loop(
-                UpdatedLeader, Visited
-            );
-        %% Server setup request
-        %% Starts setup message propagation if the node hasn't been visited
         {setup_server_request, FromPid} ->
             if
-                %% Node already visited, responds with 'node_already_visited'
                 Visited =:= true ->
-                    % io:format(
-                    %     "Node (~p, ~p) receives setup_server_request, already visited, responding to server.~n",
-                    %     [Leader#leader.node#node.x, Leader#leader.node#node.y]
-                    % ),
+                    %% Node has already been visited; notify the sender.
                     FromPid ! {self(), node_already_visited},
-                    setup_loop(
-                        Leader,
-                        Visited
-                    );
-                %% Unvisited node, starts message propagation
+                    setup_loop(Leader, StartSystemPid, Visited);
                 true ->
-                    % io:format(
-                    %     "Node (~p, ~p) receives setup_server_request, not visited, starting propagation of my leaderID: ~p.~n",
-                    %     [
-                    %         Leader#leader.node#node.x,
-                    %         Leader#leader.node#node.y,
-                    %         Leader#leader.node#node.leaderID
-                    %     ]
-                    % ),
-                    %% Start propagation as the initiating node
+                    %% Node starts propagation as the initiating node.
                     setup_loop_propagate(
-                        Leader,
+                        Leader#leader{serverID = FromPid},
                         Leader#leader.color,
                         self(),
-                        %% Set visited status to true
-                        true,
+                        true,  % Mark node as visited
                         Leader#leader.node#node.neighbors,
-                        %% Flag indicating initiating node
-                        initiator
+                        initiator,
+                        StartSystemPid
                     )
             end;
-        %% Node setup request from another node (propagation)
+
         {setup_node_request, SenderColor, PropagatedLeaderID, FromPid} ->
+            %% Node handles propagation requests based on visit status and color matching.
             if
-                %% Unvisited node with the same color, continue propagation
                 Visited =:= false andalso Leader#leader.color =:= SenderColor ->
-                    % io:format("Node (~p, ~p) has the same color as the requesting node (~p).~n", [
-                    %     Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid
-                    % ]),
-
-                    % Update leaderID and pid in the node
-                    UpdatedNode = Leader#leader.node#node{
-                        leaderID = PropagatedLeaderID
-                    },
+                    %% Propagation continues with the same color.
+                    UpdatedNode = Leader#leader.node#node{parent = FromPid, leaderID = PropagatedLeaderID},
                     UpdatedLeader = Leader#leader{node = UpdatedNode},
-
                     setup_loop_propagate(
-                        %% Becames a simple node
                         UpdatedLeader,
                         Leader#leader.color,
                         FromPid,
-                        %% Set visited status to true
-                        true,
+                        true,  % Mark node as visited
                         Leader#leader.node#node.neighbors,
-                        %% Flag for non-initiating nodes
-                        non_initiator
+                        non_initiator,
+                        StartSystemPid
                     );
-                %% Node already visited, responds with 'node_already_visited'
                 Visited =:= true ->
-                    % io:format(
-                    %     "Node (~p, ~p) has already been visited, responding accordingly to ~p.~n", [
-                    %         Leader#leader.node#node.x, Leader#leader.node#node.y, FromPid
-                    %     ]
-                    % ),
+                    %% Node has already been visited; notify the sender.
                     FromPid ! {self(), node_already_visited},
-                    setup_loop(
-                        %% Already visited, so it doesn't change the type
-                        Leader,
-                        Visited
-                    );
-                %% Node with different color, only acknowledges receipt
+                    setup_loop(Leader, StartSystemPid, Visited);
                 true ->
-                    % io:format("Node (~p, ~p) has a different color (~p), sends only received to ~p.~n", [
-                    %     Leader#leader.node#node.x, Leader#leader.node#node.y, Leader#leader.color, FromPid
-                    % ]),
+                    %% Node with a different color acknowledges only.
                     FromPid ! {self(), ack_propagation_different_color},
-                    setup_loop(
-                        %% Different color, thus the node can be a leader of another cluster
-                        Leader,
-                        Visited
-                    )
+                    setup_loop(Leader, StartSystemPid, Visited)
             end;
+
         {get_list_neighbors, FromPid} ->
-            % io:format("~p: Invio a ~p la lista dei miei vicini: ~n~p~n", [
-            %     self(), FromPid, Leader#leader.node#node.neighbors
-            % ]),
+            %% Provides the list of neighbors to the requesting node.
             FromPid ! {response_get_list_neighbors, Leader#leader.node#node.neighbors},
             node:leader_loop(Leader);
-        %% Leader ID request from neighbors
+
         {get_leader_info, FromPid} ->
-            % io:format("~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader.~n", [self(), FromPid]),
+            %% Sends the leader info to the requesting neighbor.
             FromPid ! {leader_info, Leader#leader.node#node.leaderID, Leader#leader.color},
-            setup_loop(Leader, Visited);
-        %% Fase 2 di avvio dal leader
+            setup_loop(Leader, StartSystemPid, Visited);
+
+        {add_child, ChildPid} ->
+            %% Adds a child to the node's list of children.
+            UpdatedChildren = [ChildPid | Leader#leader.node#node.children],
+            UpdatedNode = Leader#leader.node#node{children = UpdatedChildren},
+            UpdatedLeader = Leader#leader{node = UpdatedNode},
+            setup_loop(UpdatedLeader, StartSystemPid, Visited);
+
         {start_phase2, NodePIDs} ->
-            % X = Leader#leader.node#node.x,
-            % Y = Leader#leader.node#node.y,
-            InitialNeighbors = Leader#leader.node#node.neighbors,
-            LeaderID = Leader#leader.node#node.leaderID,
-
-            % io:format("Leader Node (~p, ~p) starting Phase 2.~n", [X, Y]),
-
+            %% Initiates Phase 2 setup for cluster connectivity.
+            ServerPid = Leader#leader.serverID,
             NodePIDsWithoutSelf = lists:delete(self(), NodePIDs),
-
-            % io:format("InitialNeighbors: ~p~nNodePIDsWithoutSelf: ~p~n", [InitialNeighbors, NodePIDsWithoutSelf]),
-
-            AdjNodesToCluster = gather_adjacent_nodes(
-                NodePIDsWithoutSelf, LeaderID, InitialNeighbors
-            ),
+            AdjNodesToCluster = gather_adjacent_nodes(NodePIDsWithoutSelf, Leader#leader.node#node.leaderID, Leader#leader.node#node.neighbors),
             AdjNodesToCluster_no_duplicates = utils:remove_duplicates(AdjNodesToCluster),
-
-            % io:format("AdjNodesToCluster: ~p,~nAdjNodesToCluster_no_duplicates: ~p~n", [AdjNodesToCluster, lists:delete(self(), AdjNodesToCluster_no_duplicates)]),
-
-            %% Usa `gather_adjacent_clusters` per raccogliere informazioni sui Neighbors del
             AllAdjacentClusters = gather_adjacent_clusters(
-                lists:delete(self(), AdjNodesToCluster_no_duplicates), LeaderID, [], [], Leader
+                lists:delete(self(), AdjNodesToCluster_no_duplicates), 
+                Leader#leader.node#node.leaderID, [], [], Leader
             ),
-
-            % io:format("AllAdjacentClusters: ~p~n", [AllAdjacentClusters]),
-
-            %% Invia il messaggio ai nodi del cluster con le informazioni finali
-            server ! {self(), phase2_complete, LeaderID, AllAdjacentClusters},
-
-            % Crea una lista dei nodi nel cluster escludendo il PID del leader
+            ServerPid ! {self(), phase2_complete, Leader#leader.node#node.leaderID, AllAdjacentClusters},
             FilteredNodes = lists:filter(
                 fun(NodePid) -> NodePid =/= Leader#leader.node#node.pid end,
-                Leader#leader.cluster_nodes
+                Leader#leader.nodes_in_cluster
             ),
-
-            % Invia richiesta di salvataggio a tutti i nodi in FilteredNodes
-            lists:foreach(
-                fun(NodePid) ->
-                    NodePid ! {save_to_db_node}
-                end,
-                FilteredNodes
-            ),
-
-            UpdatedLeader = Leader#leader{
-                cluster_nodes = NodePIDs, adj_clusters = AllAdjacentClusters
-            },
-
+            lists:foreach(fun(NodePid) -> NodePid ! {save_to_db_node} end, FilteredNodes),
+            UpdatedLeader = Leader#leader{nodes_in_cluster = NodePIDs, adjClusters = AllAdjacentClusters},
             node:leader_loop(UpdatedLeader)
     end.
 
-%% Funzione per propagare il messaggio di setup e gestire la cascata
-%% Input:
-%% - Node: un record 'leader' contenente i parametri del nodo corrente
-%% - Color: colore del nodo che si sta propagando
-%% - Visited: flag booleano per il controllo di visita
-%% - Neighbors: lista dei PID dei nodi vicini
-%% - InitiatorFlag: flag per indicare se il nodo è l’iniziatore della propagazione
-%% Output:
-%% - Nessun output diretto; mantiene il nodo in ascolto per nuovi messaggi
-setup_loop_propagate(
-    Leader,
-    Color,
-    FromPid,
-    Visited,
-    Neighbors,
-    InitiatorFlag
-) ->
+%% Propagates the setup message and handles recursive cascading.
+%% @spec setup_loop_propagate(#leader{}, atom(), pid(), boolean(), list(), atom(), pid()) -> no_return()
+%% @param Leader The leader record for the node.
+%% @param Color Color of the node undergoing propagation.
+%% @param FromPid The PID of the node initiating the propagation.
+%% @param Visited Boolean flag indicating whether this node has already been visited.
+%% @param Neighbors List of neighboring node PIDs.
+%% @param InitiatorFlag Flag indicating whether this node is the initiator.
+%% @param StartSystemPid The PID of the system start process.
+%%
+%% Preconditions:
+%% - Leader must contain a valid node record.
+%% - Color, FromPid, Visited, Neighbors, and InitiatorFlag must be valid inputs.
+%%
+%% Postconditions:
+%% - Continues propagation to neighboring nodes and collects acknowledgement PIDs.
+setup_loop_propagate(Leader, Color, FromPid, Visited, Neighbors, InitiatorFlag, StartSystemPid) ->
     Node = Leader#leader.node,
-
-    % io:format("Node (~p, ~p) is propagating as leader with ID: ~p and color: ~p.~n", [Node#node.x, Node#node.y, Node#node.leaderID, Color]),
-
-    %% Esclude il nodo parent dalla lista dei vicini per evitare loop
-    NeighborsToSend = [N || N <- Neighbors, N =/= Node#node.leaderID],
-    % io:format("Node (~p, ~p) will send messages to neighbors: ~p~n", [Node#node.x, Node#node.y, NeighborsToSend]),
-
-    %% Invia il messaggio di setup a ciascun vicino
-    lists:foreach(
-        fun(NeighborPid) ->
-            % io:format(
-            %     "Node (~p, ~p) is propagating leaderID: ~p and color: ~p, towards ~p.~n",
-            %     [Node#node.x, Node#node.y, Node#node.leaderID, Color, NeighborPid]
-            % ),
-            NeighborPid ! {setup_node_request, Color, Node#node.leaderID, self()}
-        end,
-        NeighborsToSend
-    ),
-
-    %% Attende gli ACK dai vicini e raccoglie i loro PID
-    % io:format("Waiting for ACKs for Node (~p, ~p).~n", [Node#node.x, Node#node.y]),
-    {ok, AccumulatedPIDs} = wait_for_ack_from_neighbors(
-        NeighborsToSend,
-        [],
-        Leader,
-        Color,
-        Visited,
-        Neighbors
-    ),
-
-    %% Se il nodo è l’iniziatore, invia i PID combinati al server
+    NeighborsToSend = [N || N <- Neighbors, N =/= Node#node.parent],
+    lists:foreach(fun(NeighborPid) -> NeighborPid ! {setup_node_request, Color, Node#node.leaderID, self()} end, NeighborsToSend),
+    {ok, AccumulatedPIDs} = wait_for_ack_from_neighbors(NeighborsToSend, [], Leader, Color, FromPid, Visited, Neighbors),
     CombinedPIDs = lists:append(AccumulatedPIDs, [self()]),
     case InitiatorFlag of
         initiator ->
-            % io:format("Node (~p, ~p) is the initiator and sends combined PIDs to the server.~n", [Node#node.x, Node#node.y]),
-            % io:format("INVIO : ~p~n", [CombinedPIDs]),
-            server ! {self(), node_setup_complete, CombinedPIDs, Color};
+            Leader#leader.serverID ! {self(), node_setup_complete, CombinedPIDs, Color};
         non_initiator ->
-            % io:format("Node (~p, ~p) is NOT the initiator and sends combined PIDs ~p to the other node : ~p~n",[Node#node.x, Node#node.y, CombinedPIDs, FromPid]),
             FromPid ! {self(), ack_propagation_same_color, CombinedPIDs}
     end,
-    %% Continua il ciclo principale del nodo con lo stato aggiornato
     UpdatedLeader = Leader#leader{node = Node},
+    setup_loop(UpdatedLeader, StartSystemPid, Visited).
 
-    setup_loop(
-        UpdatedLeader, Visited
-    ).
-
-%% Funzione helper per attendere gli ACK dai vicini e raccogliere i loro PID
-%% Input:
-%% - NeighborsToWaitFor: lista dei PID dei vicini da cui si attendono ACK
-%% - AccumulatedPIDs: lista accumulata dei PID dei vicini che hanno risposto
-%% - Parametri di stato del nodo: X, Y, Color, Visited, LeaderID, Neighbors
-%% Output:
-%% - {ok, AccumulatedPIDs}: lista di PID che confermano la propagazione
-wait_for_ack_from_neighbors(
-    NeighborsToWaitFor,
-    AccumulatedPIDs,
-    Node,
-    Color,
-    Visited,
-    Neighbors
-) ->
+%% Waits for acknowledgments from neighbors and collects their PIDs.
+%% @spec wait_for_ack_from_neighbors(list(), list(), #leader{}, atom(), pid(), boolean(), list()) -> {ok, list()}
+%% @param NeighborsToWaitFor List of neighboring PIDs from whom ACKs are expected.
+%% @param AccumulatedPIDs List of PIDs accumulated from acknowledgments.
+%% @param Node The leader node undergoing setup.
+%% @param Color Color of the node.
+%% @param StartSystemPid PID of the system start process.
+%% @param Visited Boolean flag indicating visit status.
+%% @param Neighbors List of node neighbors.
+%% @return A tuple `{ok, AccumulatedPIDs}` containing the collected PIDs.
+%%
+%% Preconditions:
+%% - `NeighborsToWaitFor` is a list of valid node PIDs.
+%%
+%% Postconditions:
+%% - Returns a list of PIDs from neighbors that confirm the propagation.
+wait_for_ack_from_neighbors(NeighborsToWaitFor, AccumulatedPIDs, Node, Color, StartSystemPid, Visited, Neighbors) ->
     if
-        % Se non ci sono vicini da attendere, restituisce la lista dei PID accumulati
         NeighborsToWaitFor =:= [] ->
             {ok, AccumulatedPIDs};
         true ->
             receive
-                %% Gestione ACK dallo stesso colore, aggiunge i PID dei vicini
                 {FromNeighbor, ack_propagation_same_color, NeighborPIDs} ->
-                    % Rimuove il vicino che ha risposto dalla lista e aggiunge i suoi PID
                     RemainingNeighbors = lists:delete(FromNeighbor, NeighborsToWaitFor),
                     NewAccumulatedPIDs = lists:append(AccumulatedPIDs, NeighborPIDs),
+                    wait_for_ack_from_neighbors(RemainingNeighbors, NewAccumulatedPIDs, Node, Color, StartSystemPid, Visited, Neighbors);
 
-                    % io:format("~p -> Ho ricevuto da ~p ack_propagation_same_color; mancano ~p.~n", [self(), FromNeighbor, RemainingNeighbors]),
-
-                    % Richiama la funzione ricorsivamente con lista aggiornata
-                    wait_for_ack_from_neighbors(
-                        RemainingNeighbors,
-                        NewAccumulatedPIDs,
-                        Node,
-                        Color,
-                        Visited,
-                        Neighbors
-                    );
-                %% Gestione ACK di colore diverso
                 {FromNeighbor, ack_propagation_different_color} ->
-                    % Rimuove il vicino dalla lista e prosegue senza aggiungere PID
                     RemainingNeighbors = lists:delete(FromNeighbor, NeighborsToWaitFor),
-                    % io:format("~p -> Ho ricevuto da ~p ack_propagation_different_color; mancano ~p.~n", [self(), FromNeighbor, RemainingNeighbors]),
-                    wait_for_ack_from_neighbors(
-                        RemainingNeighbors,
-                        AccumulatedPIDs,
-                        Node,
-                        Color,
-                        Visited,
-                        Neighbors
-                    );
-                %% Gestione nodo già visitato
+                    wait_for_ack_from_neighbors(RemainingNeighbors, AccumulatedPIDs, Node, Color, StartSystemPid, Visited, Neighbors);
+
                 {FromNeighbor, node_already_visited} ->
                     RemainingNeighbors = lists:delete(FromNeighbor, NeighborsToWaitFor),
-                    % io:format("~p -> Ho ricevuto da ~p node_already_visited; mancano ~p.~n", [self(), FromNeighbor, RemainingNeighbors]),
+                    wait_for_ack_from_neighbors(RemainingNeighbors, AccumulatedPIDs, Node, Color, StartSystemPid, Visited, Neighbors);
 
-                    wait_for_ack_from_neighbors(
-                        RemainingNeighbors,
-                        AccumulatedPIDs,
-                        Node,
-                        Color,
-                        Visited,
-                        Neighbors
-                    );
                 {setup_node_request, _SenderColor, _PropagatedLeaderID, FromPid} ->
                     FromPid ! {self(), node_already_visited},
-                    wait_for_ack_from_neighbors(
-                        NeighborsToWaitFor,
-                        AccumulatedPIDs,
-                        Node,
-                        Color,
-                        Visited,
-                        Neighbors
-                    );
-                %% Timeout in caso di mancata risposta dai vicini
+                    wait_for_ack_from_neighbors(NeighborsToWaitFor, AccumulatedPIDs, Node, Color, StartSystemPid, Visited, Neighbors);
+
                 _Other ->
-                    % io:format("~p : Timeout while waiting for ACKs from neighbors: ~p, ~p~n", [self(), NeighborsToWaitFor, _Other]),
                     {ok, AccumulatedPIDs}
             end
     end.
 
-% Funzione per inviare il messaggio e raccogliere i leader ID distinti dai vicini
-%% Input:
-%% - PidList: lista dei PID dei vicini o nodi nel cluster
-%% - LeaderID: leader ID del nodo corrente
-%% - AccumulatedClusters: lista dei leader ID già accumulati
-%% Output:
-%% - Lista aggiornata dei leader ID distinti per i cluster adiacenti
-%% Funzione per inviare il messaggio e raccogliere i leader ID distinti dai vicini
-%% evitando messaggi inutili se i dati sono già presenti in `neighbors`.
-%% Funzione aggiornata per raccogliere le informazioni sui neighbors
+%% Collects unique leader IDs from adjacent clusters.
+%% @spec gather_adjacent_clusters(list(), pid(), list(), list(), #leader{}) -> list()
+%% @param PidList List of PIDs representing neighboring or cluster nodes.
+%% @param LeaderID Leader ID of the current node.
+%% @param AccumulatedClusters List of accumulated leader IDs.
+%% @param NeighborsList List of neighboring nodes to exclude duplicates.
+%% @param Leader The current node leader.
+%% @return Returns a unique list of leader IDs for adjacent clusters.
 gather_adjacent_clusters([], _LeaderID, AccumulatedClusters, _NeighborsList, _Leader) ->
-    % Restituisce la lista finale dei neighbors e clusters senza duplicati
     AccumulatedClusters;
 gather_adjacent_clusters([Pid | Rest], LeaderID, AccumulatedClusters, NeighborsList, Leader) ->
-    % io:format("Al momento so: ~p~n", [NeighborsList]),
-    % io:format("Ora invio a: ~p , mancano~p~n", [Pid, Rest]),
-
-    %% Se il vicino non è già nel formato {Pid, Color, LeaderID}, invia richiesta per ottenere le informazioni
     Pid ! {get_leader_info, self()},
     receive
         {leader_info, NeighborLeaderID, NeighborColor} ->
-            % io:format("~p -> Ho ricevuto la risposta da ~p con LeaderID: ~p e Color: ~p.~n", [self(), Pid, NeighborLeaderID, NeighborColor]),
-            % Aggiungi come neighbor solo se ha un LeaderID diverso
-            UpdatedClusters =
-                case NeighborLeaderID =/= LeaderID of
-                    true -> [{Pid, NeighborColor, NeighborLeaderID} | AccumulatedClusters];
-                    false -> AccumulatedClusters
-                end,
+            UpdatedClusters = case NeighborLeaderID =/= LeaderID of
+                true -> [{Pid, NeighborColor, NeighborLeaderID} | AccumulatedClusters];
+                false -> AccumulatedClusters
+            end,
             UpdatedNeighborsList = [{Pid, NeighborColor, NeighborLeaderID} | NeighborsList],
             gather_adjacent_clusters(Rest, LeaderID, UpdatedClusters, UpdatedNeighborsList, Leader);
-        %% Leader ID request from neighbors
         {get_leader_info, FromPid} ->
-            % io:format("~p -> Ho ricevuto una richiesta da ~p di fornirgli il mio leader.~n", [self(), FromPid]),
             FromPid ! {leader_info, Leader#leader.node#node.leaderID, Leader#leader.color}
     after 5000 ->
-        % io:format("TIMEOUT per: ~p~n", [Pid]),
         gather_adjacent_clusters(Rest, LeaderID, AccumulatedClusters, NeighborsList, Leader)
     end.
+
 
 gather_adjacent_nodes([], _LeaderID, AccumulatedAdjNodes) ->
     % Se NodePIDsWithoutSelf è vuoto, restituisci AccumulatedAdjNodes senza fare nulla

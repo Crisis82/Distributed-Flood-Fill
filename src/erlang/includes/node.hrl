@@ -1,5 +1,6 @@
 %% Records' definition for node and leader
--record(node, {pid, x, y, leaderID, neighbors = []}).
+-record(node, {x, y, parent, children = [], time, leaderID, pid, neighbors = []}).
 -record(leader, {
-    node, color, last_event, adj_clusters = [], cluster_nodes = []
+    node, color, serverID, last_event, 
+    adjClusters = [], nodes_in_cluster = [], merge_in_progress 
 }).
