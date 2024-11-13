@@ -35,6 +35,7 @@ Il sistema utilizza diversi file di log e di dati per mantenere lo stato dei nod
 - **`leaders_data.json`**: Memorizza informazioni sui leader dei cluster e sui cluster adiacenti.
 - **`server_log.txt`**: Log di tutte le operazioni effettuate dal server.
 - **`static/matrix.png`**: Immagine aggiornata della griglia dei nodi.
+- **`DB/{X}_{Y}.json`**: Infomrmazioni locali di ciasun lono normale e leader.
 
 ## Requisiti
 
@@ -88,7 +89,7 @@ Prima di iniziare, assicurati di avere installato:
         python3 grid_visualizer.py --debug True --port <PORTA>
         ```
         
-        - **`-debug`**: Impostato su `True` per l’output di debug, utile durante lo sviluppo e la risoluzione dei problemi. Può essere impostato su `False` in produzione per migliorare la sicurezza e le performance.
+        - **`-debug`**: Impostato su `True` per l’output di debug, utile durante lo sviluppo e la risoluzione dei problemi. Può essere impostato su `False` in produzione per migliorare la performance e la visualizzazione quando ci sono tanti nodi.
         - **`-port <PORTA>`**: Porta assegnata automaticamente dal backend; sostituisci `<PORTA>` con il numero specificato dall’output di `compile_and_run.sh`.
     
     **Nota**: L'uso di Flask-SocketIO consente di mantenere sincronizzato il frontend con il backend in tempo reale. Ogni volta che un nodo cambia colore nel backend, l’interfaccia viene aggiornata automaticamente, offrendo un feedback visivo immediato per l’utente.
@@ -154,87 +155,267 @@ Per verificare automaticamente l’intero ciclo operativo del sistema e conferma
     **Nota**: I test automatici sono fondamentali per assicurare la coerenza e l’affidabilità del sistema. Questo script consente di eseguire verifiche rapide e ripetute, facilitando il debug e garantendo un comportamento corretto del sistema in diverse condizioni.
     
 
----
 
-### Esecuzione in Shell Multiple
 
-Per supportare la gestione di sessioni multiple e facilitare la configurazione e l’esecuzione del sistema in ambienti di sviluppo, puoi usare più terminali (o shell) per avviare i componenti in parallelo.
 
-### Opzione 1: Due Shell (Uso Manuale)
 
-1. **Avvia il Backend Erlang**:
+
+# Esempi di Esecuzione in Shell Multiple
+
+Questa guida ti aiuterà a configurare e avviare il sistema Distributed Flood-Fill utilizzando più terminali (o shell) per facilitare la gestione e l’esecuzione dei componenti in parallelo.
+
+## Opzione 1: Due Shell (Uso Manuale)
+
+#### 0. **Setup Iniziale**
+
+Per cominciare, aprire due terminali (shell) e navigare nei seguenti percorsi:
+
+- Primo terminale: `~/Distributed-Flood-Fill/src/test_script`
+- Secondo terminale: `~/Distributed-Flood-Fill/src/data`
+
+In questo modo, ogni terminale sarà pronto per l'avvio dei componenti necessari.
+
+![Setup Iniziale](/media/2shell/setupIniziale.png)
+
+#### 1. **Avviare il Backend Erlang**
+
+Nel terminale posizionato nella directory `test_script`, è necessario avviare lo script di compilazione e avvio del sistema Erlang. Questo script compilerà il codice e avvierà il sistema con i parametri specificati.
+
+Comando da eseguire:
+
+```bash
+./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
+```
+
+Dove:
+- `<ROWS>`: Numero di righe della griglia.
+- `<COLUMNS>`: Numero di colonne della griglia.
+- `<FROM_FILE>`: Specifica se caricare i dati da un file (`true` o `false`).
+
+Esempio:
+
+```bash
+./compile_and_run.sh 7 7 false
+```
+
+![Avvio Backend](/media/2shell/compile.png)
+
+#### 2. **Avviare il Server Flask**
+
+Nel secondo terminale, situato nella directory `data`, è necessario avviare il server Flask per la visualizzazione della griglia.
+
+Comando da eseguire:
+
+```bash
+python3 grid_visualizer.py --debug False --port <PORTA>
+```
+
+Dove:
+- `--debug`: Modalità debug (True o False).
+- `<PORTA>`: La porta sulla quale il server Flask sarà in ascolto.
+
+Esempio:
+
+```bash
+python3 grid_visualizer.py --debug True --port 47171
+```
+
+![Avvio Server Flask](/media/2shell/serverFlask.png)
+
+#### 3. **Utilizzo dell'Interfaccia Web per Dare Comandi**
+
+Una volta che il server Flask è in esecuzione, è possibile accedere all'interfaccia web per interagire con il sistema.
+
+Aprire un browser e navigare all'indirizzo:
+
+```
+http://127.0.0.1:5000
+```
+
+Nell'interfaccia web, sarà possibile selezionare un nodo della griglia e modificarne il colore attraverso il menu a tendina. Dopo aver selezionato il colore desiderato, cliccare su "Cambia Colore" per applicare la modifica.
+
+<p align="center">
+    <img src="/media/2shell/selezione_di_un_nodo.png" alt="Selezione di un Nodo" width="45%">
+    <img src="/media/2shell/risultato.png" alt="Risultato Cambio Colore" width="45%">
+</p>
+
+Nell'immagine sopra, è mostrato un esempio di selezione di un nodo (a sinistra) e il risultato dell'operazione di cambio colore (a destra).
+
+
+
+## Opzione 2: Tre Shell (Uso con Test Automatici/Specifici)
+
+Questa configurazione permette di eseguire test creati ad-hoc per verificare casi specifici del progetto Distributed-Flood-Fill.
+
+### 0. Setup Iniziale
+
+Per iniziare, aprire tre terminali (shell) e navigare nei seguenti percorsi:
+
+- **Primo terminale**: `~/Distributed-Flood-Fill/src/test_script`
+- **Secondo terminale**: `~/Distributed-Flood-Fill/src/test_script/test`
+- **Terzo terminale**: `~/Distributed-Flood-Fill/src/data`
+
+In questo modo, ogni terminale sarà pronto per l'avvio dei componenti necessari.
+
+![Setup Iniziale](/media/test/setupIniziale.png)
+
+### 1. Avviare lo Script Python per i Test Automatici
+
+Nel primo terminale, eseguire il seguente comando:
+
+```bash
+python3 script.py
+```
+
+Questo script genererà inizialmente i colori per una matrice 5x5 che verrà utilizzata nei vari test.
+
+![Esecuzione Script](/media/test/script.png)
+
+### 2. Avviare il Backend Erlang
+
+Nel secondo terminale, eseguire:
+
+```bash
+./compile_and_run.sh 5 5 true
+```
+
+Questo comando compila ed esegue il backend Erlang per gestire i nodi della matrice.
+
+![Compilazione Backend](/media/test/compila.png)
+
+### 3. Avviare il Server Flask
+
+Nel terzo terminale, utilizzare la porta indicata dal backend Erlang per avviare il server Flask. Eseguire il seguente comando (sostituendo `<PORTA>` con la porta effettiva):
+
+```bash
+python3 grid_visualizer.py --debug False --port <PORTA>
+```
+
+![Avvio Server Flask](/media/test/flask.png)
+
+Visitando l'indirizzo [http://127.0.0.1:5000](http://127.0.0.1:5000), è possibile visualizzare la matrice di nodi creata, che rimarrà la stessa per tutti i test.
+
+![Visualizzazione Matrice Web](/media/test/visualizzazione_matrice_web.png)
+
+### 4. Eseguire i Test Automatici
+
+Per avviare i test, specificare la porta di connessione nel file `generate_changes_rand.py` e selezionare il test desiderato da eseguire.
+
+![Selezione Porta e Test](/media/test/porta_opzione.png)
+
+### Descrizione dei Test
+Di seguito si elencano e si spiegano i test creati per definire come si comporta il sistema in determinate condizioni:
+#### case1
+
+#### case2
+
+#### case3
+
+#### too_old
+
+#### merge_successivo
+
+#### change_color_during_merge
+
+#### doubleMerge
+
     
-    ```bash
-    ./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
-    ```
-    
-2. **Avvia il Server Flask**:
-    
-    ```bash
-    python3 grid_visualizer.py --debug False --port <PORTA>
-    ```
-    
-    - Questa modalità è utile se si desidera controllare manualmente i componenti del sistema e verificare le interazioni.
 
-### Opzione 2: Tre Shell (Uso con Test Automatici)
 
-Questa configurazione permette di eseguire test automatici oltre al backend e al server Flask.
+## Opzione 3: Tre Shell (Uso con Test Casuali)
 
-0. **Setup iniziale**
-   ![image](https://github.com/user-attachments/assets/bf3012e0-ed48-4f8f-94b7-bcfd16542035)
-    Aprire tre shell e recarsi in:
-    - :~/Distributed-Flood-Fill/src/test_script
-    - :~/Distributed-Flood-Fill/src/test_script/test
-    - :~/Distributed-Flood-Fill/src/data
-2. **Generare Operazioni Casuali**:
+Questa configurazione permette di eseguire test casuali oltre al backend e al server Flask.
 
-     ```bash
-    python3 generate_changes_rand.py --rows <ROWS> --columns <COLUMNS> --operations <NUMBER_OPERATIONS>
-    ```
-     Ad esempio:
+### 0. Setup Iniziale
 
-    ```bash
-    python3 generate_changes_rand.py --rows 7 --columns 7 --operations 10
-    ```
-    ![image](https://github.com/user-attachments/assets/b00f2404-9eb0-43ac-b685-ddc05049f3dc)
+Aprire tre terminali (shell) e navigare nei seguenti percorsi:
 
-    Questo genera colori per una matrice 7 x 7 e 10 operazioni di ricolorazione casuali.
-    
-1. **Backend Erlang**:
-    
-    ```bash
-    ./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
-    ```
-    Ad esempio:
-   ```bash
-    ./compile_and_run.sh 7 7 true
-    ```
-    ![image](https://github.com/user-attachments/assets/5e49f2a2-4209-489b-afd8-0c67b02b8850)
-    Questo 
-    
-2. **Server Flask**:
-    
-    ```bash
-    python3 grid_visualizer.py --debug False --port 50133
-    ```
-    ![image](https://github.com/user-attachments/assets/b91d7351-6e08-4b4d-bf0f-3f0a6c5d2fdf)
+Primo terminale: `~/Distributed-Flood-Fill/src/test_script`
 
-    Questo
+Secondo terminale: `~/Distributed-Flood-Fill/src/test_script/test`
 
-    ![image](https://github.com/user-attachments/assets/b7fa7b08-6dab-4a8a-8c98-21eda3ece860)
-    Andando su http://127.0.0.1:5000
-    
-4. **Eseguire i Test Automatici**:
-    
-    Per avviare i test, specifica la porta di connessione nello script `generate_changes_rand.py`.
+Terzo terminale: `~/Distributed-Flood-Fill/src/data`
 
-    ![image](https://github.com/user-attachments/assets/1e3d7e0c-11c0-43fb-a02b-f90405dada64)
 
-    La configurazione totale è la seguente:
-    ![image](https://github.com/user-attachments/assets/26dcf32b-cb3c-4267-9182-3914eaa4fb07)
 
-    
+### 1. Generare Operazioni Casuali
 
-    
+Nel primo terminale, eseguire il seguente comando per generare operazioni casuali:
+```
+python3 generate_changes_rand.py --rows <ROWS> --columns <COLUMNS> --operations <NUMBER_OPERATIONS>
+```
+Ad esempio:
+```
+python3 generate_changes_rand.py --rows 7 --columns 7 --operations 10
+```
+Questo comando genererà i colori per una matrice 7x7 e 10 operazioni di ricolorazione casuali.
 
-Questa configurazione permette di avviare un ambiente completo di testing automatizzato e monitoraggio, utile per verificare il comportamento del sistema in scenari realistici e per osservare la resilienza del sistema in condizioni di utilizzo intensivo.
+
+
+### 2. Avviare il Backend Erlang
+
+Nel secondo terminale, eseguire:
+```
+./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
+```
+Ad esempio:
+```
+./compile_and_run.sh 7 7 true
+```
+Questo comando compila ed esegue il backend Erlang per gestire i nodi della matrice.
+
+
+
+### 3. Avviare il Server Flask
+
+Nel terzo terminale, utilizzare la porta indicata dal backend Erlang per avviare il server Flask. Eseguire il seguente comando (sostituendo <PORTA> con la porta effettiva):
+```
+python3 grid_visualizer.py --debug False --port <PORTA>
+```
+
+
+Visitando l'indirizzo http://127.0.0.1:5000, è possibile visualizzare la matrice di nodi creata.
+
+
+
+### 4. Eseguire i Test Casuali
+
+Per avviare i test casuali, specificare la porta di connessione nello script `generate_changes_rand.py` e selezionare il test da eseguire.
+
+
+
+### 5. Risultati dei Test
+
+
+I seguenti test sono stati eseguiti per valutare il comportamento del sistema con diverse dimensioni della matrice e numero di operazioni:
+
+| Test File          | Dimensione Matrice | Numero Operazioni |
+|--------------------|--------------------|-------------------|
+| `rand_5_5_5.mkv`   | 5x5                | 5                 |
+| `rand_5_5_10.mkv`  | 5x5                | 10                |
+| `rand_5_5_15.mkv`  | 5x5                | 15                |
+| `rand_7_7_5.mkv`   | 7x7                | 5                 |
+| `rand_7_7_10.mkv`  | 7x7                | 10                |
+| `rand_7_7_15.mkv`  | 7x7                | 15                |
+| `rand_10_10_5.mkv` | 10x10              | 5                 |
+| `rand_10_10_10.mkv`| 10x10              | 10                |
+| `rand_10_10_15.mkv`| 10x10              | 15                |
+| `rand_15_15_10.mkv`| 15x15              | 10                |
+| `rand_15_15_15.mkv`| 15x15              | 15                |
+| `rand_20_20_10.mkv`| 20x20              | 10                |
+| `rand_20_20_15.mkv`| 20x20              | 15                |
+
+
+Questi test hanno permesso di osservare il comportamento del sistema in diverse condizioni, fornendo un'analisi dettagliata delle prestazioni e della resilienza del sistema.
+
+
+
+### Conclusione
+
+Questa configurazione a tre shell permette di avviare un ambiente completo di testing automatizzato e monitoraggio, utile per verificare il comportamento del sistema in scenari realistici e per osservare la resilienza del sistema in condizioni di utilizzo intensivo.
+
+Per vedere delle esecuzioni, recarsi nella cartella `/media/Video/randomTest`.
+
+
+
+
