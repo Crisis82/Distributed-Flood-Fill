@@ -180,7 +180,13 @@ Per supportare la gestione di sessioni multiple e facilitare la configurazione e
 
 Questa configurazione permette di eseguire test automatici oltre al backend e al server Flask.
 
-1. **Generare Operazioni Casuali**:
+0. **Setup iniziale**
+   ![image](https://github.com/user-attachments/assets/bf3012e0-ed48-4f8f-94b7-bcfd16542035)
+    Aprire tre shell e recarsi in:
+    - :~/Distributed-Flood-Fill/src/test_script
+    - :~/Distributed-Flood-Fill/src/test_script/test
+    - :~/Distributed-Flood-Fill/src/data
+2. **Generare Operazioni Casuali**:
 
      ```bash
     python3 generate_changes_rand.py --rows <ROWS> --columns <COLUMNS> --operations <NUMBER_OPERATIONS>
@@ -203,18 +209,32 @@ Questa configurazione permette di eseguire test automatici oltre al backend e al
    ```bash
     ./compile_and_run.sh 7 7 true
     ```
+    ![image](https://github.com/user-attachments/assets/5e49f2a2-4209-489b-afd8-0c67b02b8850)
     Questo 
     
 2. **Server Flask**:
     
     ```bash
-    python3 grid_visualizer.py --debug False --port 8080
+    python3 grid_visualizer.py --debug False --port 50133
     ```
-    Questo 
+    ![image](https://github.com/user-attachments/assets/b91d7351-6e08-4b4d-bf0f-3f0a6c5d2fdf)
+
+    Questo
+
+    ![image](https://github.com/user-attachments/assets/b7fa7b08-6dab-4a8a-8c98-21eda3ece860)
+    Andando su http://127.0.0.1:5000
     
-3. **Eseguire i Test Automatici**:
+4. **Eseguire i Test Automatici**:
     
     Per avviare i test, specifica la porta di connessione nello script `generate_changes_rand.py`.
+
+    ![image](https://github.com/user-attachments/assets/1e3d7e0c-11c0-43fb-a02b-f90405dada64)
+
+    La configurazione totale è la seguente:
+    ![image](https://github.com/user-attachments/assets/26dcf32b-cb3c-4267-9182-3914eaa4fb07)
+
+    
+
     
 
 Questa configurazione permette di avviare un ambiente completo di testing automatizzato e monitoraggio, utile per verificare il comportamento del sistema in scenari realistici e per osservare la resilienza del sistema in condizioni di utilizzo intensivo.
