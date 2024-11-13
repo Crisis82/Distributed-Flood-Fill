@@ -1,4 +1,5 @@
 # Implementazione Distribuita dell'Algoritmo Flood-Fill
+![Esempio_Grafo_G (1)](https://github.com/user-attachments/assets/cde57cf8-b807-4266-b1a6-afbf402bdf86)
 
 ## Descrizione del Progetto
 
