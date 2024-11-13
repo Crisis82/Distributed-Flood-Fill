@@ -1,6 +1,52 @@
 # Implementazione Distribuita dell'Algoritmo Flood-Fill
 ![Esempio_Grafo_G (1)](https://github.com/user-attachments/assets/cde57cf8-b807-4266-b1a6-afbf402bdf86)
 
+- [Implementazione Distribuita dell'Algoritmo Flood-Fill](#implementazione-distribuita-dell-algoritmo-flood-fill)
+  * [Descrizione del Progetto](#descrizione-del-progetto)
+    + [Funzionalità Principali](#funzionalit--principali)
+    + [Struttura del Progetto](#struttura-del-progetto)
+      - [Backend (Erlang)](#backend--erlang-)
+      - [Frontend (Python)](#frontend--python-)
+    + [Struttura dei File](#struttura-dei-file)
+  * [Requisiti](#requisiti)
+    + [Installazione delle Dipendenze](#installazione-delle-dipendenze)
+  * [Guida all'Uso del Sistema](#guida-all-uso-del-sistema)
+    + [Prerequisiti](#prerequisiti)
+    + [Istruzioni Passo-Passo](#istruzioni-passo-passo)
+  * [Automazione e Test](#automazione-e-test)
+    + [Generazione di Matrice con Colori e Operazioni Casuali](#generazione-di-matrice-con-colori-e-operazioni-casuali)
+    + [Esecuzione di Test Automatici con `script.py`](#esecuzione-di-test-automatici-con--scriptpy-)
+- [Esempi di Esecuzione in Shell Multiple](#esempi-di-esecuzione-in-shell-multiple)
+  * [Opzione 1: Due Shell (Uso Manuale)](#opzione-1--due-shell--uso-manuale-)
+      - [0. **Setup Iniziale**](#0---setup-iniziale--)
+      - [1. **Avviare il Backend Erlang**](#1---avviare-il-backend-erlang--)
+      - [2. **Avviare il Server Flask**](#2---avviare-il-server-flask--)
+      - [3. **Utilizzo dell'Interfaccia Web per Dare Comandi**](#3---utilizzo-dell-interfaccia-web-per-dare-comandi--)
+  * [Opzione 2: Tre Shell (Uso con Test Automatici/Specifici)](#opzione-2--tre-shell--uso-con-test-automatici-specifici-)
+    + [0. Setup Iniziale](#0-setup-iniziale)
+    + [1. Avviare lo Script Python per i Test Automatici](#1-avviare-lo-script-python-per-i-test-automatici)
+    + [2. Avviare il Backend Erlang](#2-avviare-il-backend-erlang)
+    + [3. Avviare il Server Flask](#3-avviare-il-server-flask)
+    + [4. Eseguire i Test Automatici](#4-eseguire-i-test-automatici)
+  * [Opzione 3: Tre Shell (Uso con Test Casuali)](#opzione-3--tre-shell--uso-con-test-casuali-)
+    + [0. Setup Iniziale](#0-setup-iniziale-1)
+    + [1. Generare Operazioni Casuali](#1-generare-operazioni-casuali)
+    + [2. Avviare il Backend Erlang](#2-avviare-il-backend-erlang-1)
+    + [3. Avviare il Server Flask](#3-avviare-il-server-flask-1)
+    + [4. Eseguire i Test Casuali](#4-eseguire-i-test-casuali)
+    + [5. Risultati dei Test](#5-risultati-dei-test)
+    + [Conclusione](#conclusione)
+- [Descrizione dei Test](#descrizione-dei-test)
+  * [Caso 1: Richiesta di Cambio Colore con Timestamp Anteriore che Richiede un Merge](#caso-1--richiesta-di-cambio-colore-con-timestamp-anteriore-che-richiede-un-merge)
+  * [Caso 2: Richiesta di Cambio Colore con Timestamp Anteriore che Non Richiede un Merge](#caso-2--richiesta-di-cambio-colore-con-timestamp-anteriore-che-non-richiede-un-merge)
+  * [Caso 3: Richiesta di Merge Ricevuta Durante un Cambio Colore con Timestamp Anteriore](#caso-3--richiesta-di-merge-ricevuta-durante-un-cambio-colore-con-timestamp-anteriore)
+  * [Caso "Too Old": Gestione di una Richiesta con Timestamp Troppo Vecchio](#caso--too-old---gestione-di-una-richiesta-con-timestamp-troppo-vecchio)
+  * [Caso "Change Color During Merge": Richiesta di Cambio Colore Ricevuta Durante un Merge](#caso--change-color-during-merge---richiesta-di-cambio-colore-ricevuta-durante-un-merge)
+  * [Caso "Double Merge": Doppio Merge tra Cluster Adiacenti con Cambio Colore](#caso--double-merge---doppio-merge-tra-cluster-adiacenti-con-cambio-colore)
+
+
+
+
 ## Descrizione del Progetto
 
 Questo progetto implementa un sistema distribuito per la gestione e visualizzazione di una matrice di nodi, dove ciascun nodo rappresenta un pixel in una griglia bidimensionale. Ogni nodo può cambiare colore tramite comandi di cambio-colore inviati dall'interfaccia frontend sviluppata in **Python** con **Flask**. Il backend distribuito è implementato in **Erlang**, che gestisce la comunicazione e la consistenza dei colori dei nodi in tempo reale.
@@ -304,74 +350,6 @@ Per avviare i test, specificare la porta di connessione nel file `generate_chang
 
 ![Selezione Porta e Test](/media/test/porta_opzione.png)
 
-### Descrizione dei Test
-Di seguito si elencano e si spiegano i test creati per definire come si comporta il sistema in determinate condizioni:
-#### Caso 1: Richiesta di Cambio Colore con Timestamp Anteriore che Richiede un Merge
-**Condizione**: Dopo che è stata eseguita un’operazione di cambio colore con timestamp T2 arriva una nuova richiesta con timestamp T1 < T2che, all'epoca T1, avrebbe portato a un merge con un cluster adiacente.
-
-**Comportamento Atteso**:
-
-- Viene ripristinato lo stato al tempo T1 per tenere conto della nuova richiesta.
-- Si esegue il merge tra i due cluster come richiesto al tempo T1. 
-- Si applica il colore risultante dall’operazione più recente, assicurando la coerenza dello stato.
-
-
-    ![Case 1](/media/gif/case1.gif)
-
-    ![Case 1](/media/sequence_diagram/caso1.png)
-
-#### Caso 2: Richiesta di Cambio Colore con Timestamp Anteriore che Non Richiede un Merge
-**Condizione**: Una richiesta con timestamp T1 < T2 arriva dopo che l’operazione con timestamp T2 ha già effettuato un merge. Tuttavia, la richiesta originale con T1 non avrebbe generato un merge.
-
-**Comportamento Atteso**:
-- Poiché lo stato è già stato aggiornato con un merge che cambia la configurazione, la richiesta con timestamp T1 viene ignorata. Questo evita di eseguire operazioni ormai superate che non rispettano le condizioni attuali.
-
-    ![Case 2](/media/gif/case2.gif)
-
-    ![Case 2](/media/sequence_diagram/caso2.png)
-
-#### Caso 3: Richiesta di Merge Ricevuta Durante un Cambio Colore con Timestamp Anteriore
-**Condizione**: Un leader riceve una richiesta di merge mentre è in attesa di completare un cambio colore con timestamp anteriore.
-
-**Comportamento Atteso**:
-
-- Il leader attende un periodo di tempo definito per ricevere eventuali altre richieste in ritardo.
-Se dopo il timeout non arrivano ulteriori richieste, procede con l’operazione di merge.
-
-- **Motivazione**: Questo approccio riduce il rischio di inconsistenze dovute a operazioni fuori ordine, garantendo che le richieste precedenti vengano elaborate in modo adeguato prima di procedere.
-    ![Case 3](/media/gif/case3.gif)
-    ![Case 3](/media/sequence_diagram/caso3.png)
-
-#### Caso "Too Old": Gestione di una Richiesta con Timestamp Troppo Vecchio
-**Condizione**: Un leader riceve una richiesta di cambio colore o di merge che ha un timestamp troppo vecchio rispetto all'ultima operazione completata.
-
-**Comportamento Atteso**:
-
-- La richiesta viene ignorata ("droppata") poiché il suo stato è ormai superato rispetto alle operazioni recenti. Questo evita modifiche non più rilevanti che potrebbero introdurre inconsistenze.
-    ![Too old](/media/gif/too_old.gif)
-    ![Too old](/media/sequence_diagram/too_old.png)
-
-#### Caso "Change Color During Merge": Richiesta di Cambio Colore Ricevuta Durante un Merge
-**Condizione**: Mentre è in corso un merge, un leader riceve una richiesta di cambio colore o di merge che è successiva rispetto a quella in esecuzione.
-
-**Comportamento Atteso**:
-
-- La richiesta viene messa in coda ed eseguita successivamente, evitando di alterare lo stato attuale mentre il merge è in esecuzione.
-    ![change_color_during_merge](/media/gif/change_color_during_merge.gif)
-    ![change_color_during_merge](/media/sequence_diagram/change_color_during_merge.png)
-
-#### Caso "Double Merge": Doppio Merge tra Cluster Adiacenti con Cambio Colore
-**Condizione**: Due cluster adiacenti, inizialmente di colori diversi, ricevono una richiesta di cambio colore che porta entrambi a diventare dello stesso colore.
-
-**Comportamento Atteso**:
-
-- Si esegue un merge, unendo i cluster nel nuovo colore comune, creando un unico cluster più grande.
-
-    ![Double merge](/media/gif/doubleMerge.gif)
-    ![Double merge](/media/sequence_diagram/doubleMerge.png)
-
-    
-
 
 ## Opzione 3: Tre Shell (Uso con Test Casuali)
 
@@ -381,11 +359,11 @@ Questa configurazione permette di eseguire test casuali oltre al backend e al se
 
 Aprire tre terminali (shell) e navigare nei seguenti percorsi:
 
-Primo terminale: `~/Distributed-Flood-Fill/src/test_script`
+- Primo terminale: `~/Distributed-Flood-Fill/src/test_script`
 
-Secondo terminale: `~/Distributed-Flood-Fill/src/test_script/test`
+- Secondo terminale: `~/Distributed-Flood-Fill/src/test_script/test`
 
-Terzo terminale: `~/Distributed-Flood-Fill/src/data`
+- Terzo terminale: `~/Distributed-Flood-Fill/src/data`
 
 
 
@@ -470,3 +448,287 @@ Per vedere delle esecuzioni, recarsi nella cartella `/media/Video/randomTest`.
 
 
 
+# Descrizione dei Test
+Di seguito si elencano e si spiegano i test creati per definire come si comporta il sistema in determinate condizioni:
+## Caso 1: Richiesta di Cambio Colore con Timestamp Anteriore che Richiede un Merge
+**Condizione**: Dopo che è stata eseguita un’operazione di cambio colore con timestamp T2 arriva una nuova richiesta con timestamp T1 < T2che, all'epoca T1, avrebbe portato a un merge con un cluster adiacente.
+
+**Comportamento Atteso**:
+
+- Viene ripristinato lo stato al tempo T1 per tenere conto della nuova richiesta.
+- Si esegue il merge tra i due cluster come richiesto al tempo T1. 
+- Si applica il colore risultante dall’operazione più recente, assicurando la coerenza dello stato.
+
+    ![Case 1](/media/sequence_diagram/caso1.png)
+
+**Descrizione** della funzione case1(PORT):
+
+```python
+def case1(PORT):
+    nodes_data = load_nodes_data()
+    time1 = datetime.now()
+    time2 = datetime.now() + timedelta(milliseconds=1000)
+    
+    operations = [
+        (get_pid_by_coordinates(nodes_data, 1, 1), "blue", time2),
+        (get_pid_by_coordinates(nodes_data, 1, 1), "purple", time1),
+    ]
+    
+    for pid, color, t in operations:
+        send_color_change_request(pid, color, t, PORT)
+        time.sleep(4)
+```
+
+1. Primo messaggio:
+    - **Nodo** **target**: Coordinate (1, 1)
+    - **PID**: Otteniuto con get_pid_by_coordinates(nodes_data, 1, 1)
+    - **Colore**: "blue"
+    - **Timestamp**: time2 (tempo attuale + 1 secondo)
+    - **Azione**: Invio di una richiesta di cambio colore verso "blue" con un timestamp futuro.
+
+2. Secondo messaggio (inviato dopo 4 secondi):
+    - **Nodo target**: Stesso nodo alle coordinate (1, 1)
+    - **PID**: Come sopra
+    - **Colore**: "purple"
+    - **Timestamp**: time1 (tempo attuale)
+    - **Azione**: Invio di una richiesta di cambio colore con un timestamp precedente che avrebbe richiesto un merge.
+
+**Scopo**: Simulare una richiesta più vecchia che arriva in ritardo e avrebbe causato un merge. Il sistema dovrebbe ripristinare lo stato al tempo T1, eseguire il merge, e riapplicare le operazioni successive per garantire consistenza.
+
+
+![Case 1](/media/gif/case1.gif)
+
+
+## Caso 2: Richiesta di Cambio Colore con Timestamp Anteriore che Non Richiede un Merge
+**Condizione**: Una richiesta con timestamp T1 < T2 arriva dopo che l’operazione con timestamp T2 ha già effettuato un merge. Tuttavia, la richiesta originale con T1 non avrebbe generato un merge.
+
+**Comportamento Atteso**:
+- Poiché lo stato è già stato aggiornato con un merge che cambia la configurazione, la richiesta con timestamp T1 viene ignorata. Questo evita di eseguire operazioni ormai superate che non rispettano le condizioni attuali.
+
+    ![Case 2](/media/sequence_diagram/caso2.png)
+
+**Obiettivo**: Valutare il comportamento del sistema di fronte a una richiesta di cambio colore non necessaria, che arriva con timestamp anteriore.
+
+**Funzione nel codice**: `case2(PORT)`
+
+**Esempio di codice**:
+
+```python
+python
+Copia codice
+def case2(PORT):
+    nodes_data = load_nodes_data()
+    time1 = datetime.now()
+    time2 = datetime.now() + timedelta(milliseconds=1000)
+
+    operations = [
+        (get_pid_by_coordinates(nodes_data, 1, 1), "blue", time2),
+        (get_pid_by_coordinates(nodes_data, 1, 1), "pink", time1),
+    ]
+
+    for pid, color, t in operations:
+        send_color_change_request(pid, color, t, PORT)
+        time.sleep(4)
+
+```
+
+**Descrizione**:
+
+1. **Primo messaggio**:
+    - **Nodo target**: Coordinate `(1, 1)`
+    - **PID**: Otteniuto con `get_pid_by_coordinates(nodes_data, 1, 1)`
+    - **Colore**: `"blue"`
+    - **Timestamp**: `time2` (tempo attuale + 1 secondo)
+    - **Azione**: Cambio colore verso `"blue"`.
+2. **Secondo messaggio** (inviato dopo 4 secondi):
+    - **Nodo target**: Stesso nodo alle coordinate `(1, 1)`
+    - **Colore**: `"pink"`
+    - **Timestamp**: `time1` (tempo attuale)
+    - **Azione**: Cambio colore non necessario, poiché il nodo è già in stato aggiornato.
+
+**Scopo**: Verificare che il sistema ignori richieste obsolete che non richiedono modifiche allo stato attuale.
+
+![Case 2](/media/gif/case2.gif)
+
+## Caso 3: Richiesta di Merge Ricevuta Durante un Cambio Colore con Timestamp Anteriore
+**Condizione**: Un leader riceve una richiesta di merge mentre è in attesa di completare un cambio colore con timestamp anteriore.
+
+**Comportamento Atteso**:
+
+- Il leader attende un periodo di tempo definito per ricevere eventuali altre richieste in ritardo.
+Se dopo il timeout non arrivano ulteriori richieste, procede con l’operazione di merge.
+
+- **Motivazione**: Questo approccio riduce il rischio di inconsistenze dovute a operazioni fuori ordine, garantendo che le richieste precedenti vengano elaborate in modo adeguato prima di procedere.
+
+    ![Case 3](/media/sequence_diagram/caso3.png)
+
+**Obiettivo**: Verificare come il sistema gestisce una richiesta di merge mentre un leader è in attesa di completare un cambio colore con timestamp precedente.
+
+**Funzione nel codice**: `case3(PORT)`
+
+**Esempio di codice**:
+
+```python
+python
+Copia codice
+def case3(PORT):
+    nodes_data = load_nodes_data()
+    time1 = datetime.now()
+    time2 = datetime.now() + timedelta(milliseconds=1000)
+
+    operations = [
+        (get_pid_by_coordinates(nodes_data, 1, 1), "purple", time2),
+        (get_pid_by_coordinates(nodes_data, 1, 3), "green", time1),
+    ]
+
+    for pid, color, t in operations:
+        send_color_change_request(pid, color, t, PORT)
+        time.sleep(1)
+
+```
+
+**Descrizione**:
+
+1. **Primo messaggio**:
+    - **Nodo target**: Coordinate `(1, 1)`
+    - **PID**: `get_pid_by_coordinates(nodes_data, 1, 1)`
+    - **Colore**: `"purple"`
+    - **Timestamp**: `time2`
+    - **Azione**: Cambio colore verso `"purple"`.
+2. **Secondo messaggio** (dopo 1 secondo):
+    - **Nodo target**: `(1, 3)`
+    - **Colore**: `"green"`
+    - **Timestamp**: `time1`
+    - **Azione**: Richiesta di merge da un nodo vicino.
+
+**Scopo**: Verificare che il leader attenda eventuali richieste ritardate prima di procedere col merge.
+
+![Case 3](/media/gif/case3.gif)
+
+## Caso "Too Old": Gestione di una Richiesta con Timestamp Troppo Vecchio
+**Condizione**: Un leader riceve una richiesta di cambio colore o di merge che ha un timestamp troppo vecchio rispetto all'ultima operazione completata.
+
+**Comportamento Atteso**:
+
+- La richiesta viene ignorata ("droppata") poiché il suo stato è ormai superato rispetto alle operazioni recenti. Questo evita modifiche non più rilevanti che potrebbero introdurre inconsistenze.
+
+    ![Too old](/media/sequence_diagram/too_old.png)
+
+**Obiettivo**: Garantire che il sistema ignori le richieste con timestamp troppo vecchi rispetto allo stato attuale.
+
+**Funzione nel codice**: `too_old(PORT)`
+
+**Esempio di codice**:
+
+```python
+python
+Copia codice
+def too_old(PORT):
+    nodes_data = load_nodes_data()
+    time1 = datetime.now()
+    operations = [
+        (get_pid_by_coordinates(nodes_data, 1, 1), "blue", time1),
+        (get_pid_by_coordinates(nodes_data, 1, 1), "purple", time1 - timedelta(milliseconds=5000)),
+    ]
+    for pid, color, t in operations:
+        send_color_change_request(pid, color, t, PORT)
+        time.sleep(1)
+
+```
+
+**Descrizione**:
+
+1. **Primo messaggio**:
+    - **Nodo target**: `(1, 1)`
+    - **Colore**: `"blue"`
+    - **Timestamp**: `time1`
+    - **Azione**: Cambio colore a `"blue"`.
+2. **Secondo messaggio**:
+    - **Nodo target**: `(1, 1)`
+    - **Colore**: `"purple"`
+    - **Timestamp**: `time1 - 5000ms`
+    - **Azione**: Richiesta obsoleta.
+
+**Scopo**: Confermare che il sistema ignori la richiesta obsoleta per evitare inconsistenze.
+
+![Too old](/media/gif/too_old.gif)
+
+## Caso "Change Color During Merge": Richiesta di Cambio Colore Ricevuta Durante un Merge
+**Condizione**: Mentre è in corso un merge, un leader riceve una richiesta di cambio colore o di merge che è successiva rispetto a quella in esecuzione.
+
+**Comportamento Atteso**:
+
+- La richiesta viene messa in coda ed eseguita successivamente, evitando di alterare lo stato attuale mentre il merge è in esecuzione.
+    
+    ![change_color_during_merge](/media/sequence_diagram/change_color_during_merge.png)
+
+**Obiettivo**: Verificare la gestione di una richiesta di cambio colore durante un merge.
+
+**Funzione nel codice**: `change_color_during_merge(PORT)`
+
+**Esempio di codice**:
+
+```python
+python
+Copia codice
+def change_color_during_merge(PORT):
+    nodes_data = load_nodes_data()
+    operations = [
+        (get_pid_by_coordinates(nodes_data, 3, 4), "purple", datetime.now()),
+        (get_pid_by_coordinates(nodes_data, 5, 5), "pink", datetime.now() + timedelta(milliseconds=1000)),
+    ]
+    for pid, color, t in operations:
+        send_color_change_request(pid, color, t, PORT)
+        time.sleep(0.5)
+
+```
+
+**Descrizione**:
+
+1. **Prima richiesta**:
+    - **Nodo**: `(3, 4)` con colore `"purple"`.
+2. **Seconda richiesta**:
+    - **Nodo**: `(5, 5)` con colore `"pink"`, mentre il merge è ancora in corso.
+
+**Scopo**: Confermare che il sistema metta in coda la nuova richiesta, evitando interferenze. 
+
+![change_color_during_merge](/media/gif/change_color_during_merge.gif)
+
+## Caso "Double Merge": Doppio Merge tra Cluster Adiacenti con Cambio Colore
+**Condizione**: Due cluster adiacenti, inizialmente di colori diversi, ricevono una richiesta di cambio colore che porta entrambi a diventare dello stesso colore.
+
+**Comportamento Atteso**:
+
+- Si esegue un merge, unendo i cluster nel nuovo colore comune, creando un unico cluster più grande.
+
+    
+    ![Double merge](/media/sequence_diagram/doubleMerge.png)
+
+**Obiettivo**: Verificare la gestione di due merge simultanei.
+
+**Funzione nel codice**: `doubleMerge(PORT)`
+
+**Esempio di codice**:
+
+```python
+python
+Copia codice
+def doubleMerge(PORT):
+    nodes_data = load_nodes_data()
+    operations = [
+        (get_pid_by_coordinates(nodes_data, 3, 2), "green", datetime.now()),
+        (get_pid_by_coordinates(nodes_data, 5, 3), "green", datetime.now()),
+    ]
+    for pid, color, t in operations:
+        send_color_change_request(pid, color, t, PORT)
+        time.sleep(0.1)
+
+```
+
+**Descrizione**:
+
+1. **Nodo `(3, 2)`** con colore `"green"`.
+2. **Nodo `(5, 3)`** con colore `"green"`.
+
+**Scopo**: Simulare la fusione simultanea di due cluster adiacenti nello stesso colore, creando un singolo cluster.   
+![Double merge](/media/gif/doubleMerge.gif)
