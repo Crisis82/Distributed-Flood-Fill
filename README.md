@@ -180,25 +180,39 @@ Per supportare la gestione di sessioni multiple e facilitare la configurazione e
 
 Questa configurazione permette di eseguire test automatici oltre al backend e al server Flask.
 
-1. **Generare Operazioni Casuali** (opzionale, se vuoi testare con operazioni di cambio colore predefinite):
-    
+1. **Generare Operazioni Casuali**:
+
+     ```bash
+    python3 generate_changes_rand.py --rows <ROWS> --columns <COLUMNS> --operations <NUMBER_OPERATIONS>
+    ```
+     Ad esempio:
+
     ```bash
     python3 generate_changes_rand.py --rows 7 --columns 7 --operations 10
     ```
+    ![image](https://github.com/user-attachments/assets/b00f2404-9eb0-43ac-b685-ddc05049f3dc)
+
+    Questo genera colori per una matrice 7 x 7 e 10 operazioni di ricolorazione casuali.
     
-2. **Backend Erlang**:
+1. **Backend Erlang**:
     
     ```bash
     ./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
     ```
+    Ad esempio:
+   ```bash
+    ./compile_and_run.sh 7 7 true
+    ```
+    Questo 
     
-3. **Server Flask**:
+2. **Server Flask**:
     
     ```bash
     python3 grid_visualizer.py --debug False --port 8080
     ```
+    Questo 
     
-4. **Eseguire i Test Automatici**:
+3. **Eseguire i Test Automatici**:
     
     Per avviare i test, specifica la porta di connessione nello script `generate_changes_rand.py`.
     
