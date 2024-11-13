@@ -305,19 +305,69 @@ Per avviare i test, specificare la porta di connessione nel file `generate_chang
 
 ### Descrizione dei Test
 Di seguito si elencano e si spiegano i test creati per definire come si comporta il sistema in determinate condizioni:
-#### case1
+#### Caso 1: Richiesta di Cambio Colore con Timestamp Anteriore che Richiede un Merge
+**Condizione**: Dopo che è stata eseguita un’operazione di cambio colore con timestamp T2 arriva una nuova richiesta con timestamp T1 < T2che, all'epoca T1, avrebbe portato a un merge con un cluster adiacente.
 
-#### case2
+**Comportamento Atteso**:
 
-#### case3
+- Viene ripristinato lo stato al tempo T1 per tenere conto della nuova richiesta.
+- Si esegue il merge tra i due cluster come richiesto al tempo T1. 
+- Si applica il colore risultante dall’operazione più recente, assicurando la coerenza dello stato.
 
-#### too_old
 
-#### merge_successivo
+    ![Case 1](/media/gif/case1.gif)
 
-#### change_color_during_merge
+    ![Case 1](/media/sequence_diagram/caso1.png)
 
-#### doubleMerge
+#### Caso 2: Richiesta di Cambio Colore con Timestamp Anteriore che Non Richiede un Merge
+**Condizione**: Una richiesta con timestamp T1 < T2 arriva dopo che l’operazione con timestamp T2 ha già effettuato un merge. Tuttavia, la richiesta originale con T1 non avrebbe generato un merge.
+
+**Comportamento Atteso**:
+- Poiché lo stato è già stato aggiornato con un merge che cambia la configurazione, la richiesta con timestamp T1 viene ignorata. Questo evita di eseguire operazioni ormai superate che non rispettano le condizioni attuali.
+
+    ![Case 2](/media/gif/case2.gif)
+
+    ![Case 2](/media/sequence_diagram/caso2.png)
+
+#### Caso 3: Richiesta di Merge Ricevuta Durante un Cambio Colore con Timestamp Anteriore
+**Condizione**: Un leader riceve una richiesta di merge mentre è in attesa di completare un cambio colore con timestamp anteriore.
+
+**Comportamento Atteso**:
+
+- Il leader attende un periodo di tempo definito per ricevere eventuali altre richieste in ritardo.
+Se dopo il timeout non arrivano ulteriori richieste, procede con l’operazione di merge.
+
+- **Motivazione**: Questo approccio riduce il rischio di inconsistenze dovute a operazioni fuori ordine, garantendo che le richieste precedenti vengano elaborate in modo adeguato prima di procedere.
+    ![Case 3](/media/gif/case3.gif)
+    ![Case 3](/media/sequence_diagram/caso3.png)
+
+#### Caso "Too Old": Gestione di una Richiesta con Timestamp Troppo Vecchio
+**Condizione**: Un leader riceve una richiesta di cambio colore o di merge che ha un timestamp troppo vecchio rispetto all'ultima operazione completata.
+
+**Comportamento Atteso**:
+
+- La richiesta viene ignorata ("droppata") poiché il suo stato è ormai superato rispetto alle operazioni recenti. Questo evita modifiche non più rilevanti che potrebbero introdurre inconsistenze.
+    ![Too old](/media/gif/too_old.gif)
+    ![Too old](/media/sequence_diagram/too_old.png)
+
+#### Caso "Change Color During Merge": Richiesta di Cambio Colore Ricevuta Durante un Merge
+**Condizione**: Mentre è in corso un merge, un leader riceve una richiesta di cambio colore o di merge che è successiva rispetto a quella in esecuzione.
+
+**Comportamento Atteso**:
+
+- La richiesta viene messa in coda ed eseguita successivamente, evitando di alterare lo stato attuale mentre il merge è in esecuzione.
+    ![change_color_during_merge](/media/gif/change_color_during_merge.gif)
+    ![change_color_during_merge](/media/sequence_diagram/change_color_during_merge.png)
+
+#### Caso "Double Merge": Doppio Merge tra Cluster Adiacenti con Cambio Colore
+**Condizione**: Due cluster adiacenti, inizialmente di colori diversi, ricevono una richiesta di cambio colore che porta entrambi a diventare dello stesso colore.
+
+**Comportamento Atteso**:
+
+- Si esegue un merge, unendo i cluster nel nuovo colore comune, creando un unico cluster più grande.
+
+    ![Double merge](/media/gif/doubleMerge.gif)
+    ![Double merge](/media/sequence_diagram/doubleMerge.png)
 
     
 
