@@ -24,7 +24,7 @@ Nel documento viene proposto un approccio basato su una partizione dei nodi in c
 
 In questo capitolo viene descritto il problema principale affrontato dal progetto, insieme a una panoramica della soluzione proposta. L'obiettivo \`e sviluppare una versione distribuita dell'algoritmo \emph{Flood-Fill}, che permette di ricolorare aree connesse in una struttura bidimensionale, come un'immagine digitale, dove ogni pixel \`e rappresentato da un nodo della rete distribuita. Questo scenario introduce sfide legate alla comunicazione tra nodi, alla gestione delle operazioni concorrenti e alla tolleranza ai guasti, tutti aspetti che devono essere gestiti in modo efficiente.
 
-\section{Descrizione del problema}
+\section{Descrizione del problema}\label{sec:descrizione_problema}
 
 Il problema consiste nel ricolorare un'area connessa di una matrice bidimensionale $img[N][M]$, dove ogni elemento $img[i][j]$\footnote{con $0 \le i < N$ e $0 \le j < M$} rappresenta il colore di un pixel in posizione $(i,j)$. Dato un pixel iniziale in posizione \texttt{(x, y)} e un nuovo colore \texttt{newColor}, l'obiettivo \`e cambiare il colore del pixel selezionato e di tutti i pixel adiacenti che condividono lo stesso colore iniziale con \texttt{newColor} (vedi Fig.~\ref{fig:esempio_nodi}). Questa ricolorazione deve propagarsi attraverso nodi adiacenti, in tutte le direzioni (orizzontale, verticale, diagonale).
 
@@ -565,7 +565,7 @@ Questo evita di sovrascrivere cambiamenti significativi con operazioni ormai obs
 \newpage
 \paragraph{Caso 3: Richiesta di merge ricevuta durante un cambio Colore con timestamp anteriore}\label{par:case3}
 
-Quando un leader riceve una richiesta di merge mentre è in corso un'operazione di cambio colore con un timestamp anteriore (Figura \ref{fig:caso3_concorrenza}):
+Quando un leader riceve una richiesta di merge mentre \`e in corso un'operazione di cambio colore con un timestamp anteriore (Figura \ref{fig:caso3_concorrenza}):
 
 \begin{itemize}
     \item Il leader attende per un periodo di tempo prestabilito per consentire l'arrivo di eventuali richieste tardive.
@@ -577,7 +577,7 @@ Questo meccanismo previene eventuali inconsistenze dovute all'ordine fuori sincr
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth,align=t]{images/concorrenza/caso3.png}
-    \caption{Caso 3: Richiesta di merge ricevuta mentre è in corso un cambio colore con timestamp anteriore}
+    \caption{Caso 3: Richiesta di merge ricevuta mentre \`e in corso un cambio colore con timestamp anteriore}
     \label{fig:caso3_concorrenza}
 \end{figure}
 
@@ -587,7 +587,7 @@ Questo meccanismo previene eventuali inconsistenze dovute all'ordine fuori sincr
 Quando un leader riceve una richiesta di cambio colore o di merge con un timestamp troppo vecchio rispetto all'ultima operazione completata (Figura \ref{fig:caso_too_old}):
 
 \begin{itemize}
-    \item La richiesta viene ignorata (''droppata'') poiché il suo stato è ormai obsoleto rispetto alle operazioni più recenti.
+    \item La richiesta viene ignorata (''droppata'') poiché il suo stato \`e ormai obsoleto rispetto alle operazioni più recenti.
 \end{itemize}
 
 Questo assicura che non vengano applicate modifiche non più pertinenti, evitando di introdurre inconsistenze nel sistema.
@@ -602,13 +602,13 @@ Questo assicura che non vengano applicate modifiche non più pertinenti, evitand
 \newpage
 \paragraph{Caso ``Cambio Colore durante Merge'': richiesta di cambio colore ricevuta durante un merge}\label{par:change_color_during_merge}
 
-Se un leader riceve una richiesta di cambio colore o di merge mentre è in corso un'operazione di merge (Figura \ref{fig:change_color_during_merge}):
+Se un leader riceve una richiesta di cambio colore o di merge mentre \`e in corso un'operazione di merge (Figura \ref{fig:change_color_during_merge}):
 
 \begin{itemize}
     \item La richiesta viene accodata e verrà eseguita una volta completato il merge in corso.
 \end{itemize}
 
-In questo modo, si evita di alterare lo stato corrente mentre è in corso il merge, garantendo la coerenza e l'ordine delle operazioni.
+In questo modo, si evita di alterare lo stato corrente mentre \`e in corso il merge, garantendo la coerenza e l'ordine delle operazioni.
 
 \begin{figure}[H]
     \centering
@@ -731,19 +731,15 @@ Nel sistema proposto \`e stato scelto di utilizzare la terza soluzione, in quant
 
 \subsubsection{Selezione del leader}
 
-Una volta che a ciascun nodo \`e stato attribuito un ID, \`e necessario un criterio per la selezione del leader all'interno di ciascun cluster. I criteri di selezione possono variare in base alle esigenze del sistema, ma nel contesto di questo progetto si utilizza il seguente approccio:
+Come descritto nella sezione sul meccanismo di setup~(\ref{subsec:setup}), la matrice di nodi viene scansionata seguendo un ordine crescente delle coordinate \texttt{x} e \texttt{y} a partire dalla posizione $(0,0)$.
+Inoltre, ogni nodo non ancora visitato che inizia l'algoritmo di scoperta del cluster viene eletto a leader, pertanto per ogni cluster di nodi, il leader sar\`a il nodo con coordinate \texttt{x} e \texttt{y} (e di conseguenza ID) pi\`u basse tra i nodi del cluster stesso.
 
-\paragraph{ID pi\`u basso come leader}
-Il criterio principale adottato \`e la selezione del nodo con l'ID pi\`u basso all'interno del cluster. Questo approccio offre diversi vantaggi:
-\begin{itemize}
-    \item \textbf{Semplicit\`a}: La selezione del leader basata sull'ID pi\`u basso \`e semplice da implementare e non richiede calcoli complessi o monitoraggi continui.
-    \item \textbf{Determinismo}: Il nodo con l'ID pi\`u basso \`e sempre determinabile, garantendo che la selezione del leader sia univoca e ripetibile.
-\end{itemize}
+Differente \`e invece la gestione del leader nelle operazioni di merge. Per mantenere la complessit\`a al minimo e le operazioni pi\`u ``naturali'' possibili, si \`e deciso di tenere come leader del nuovo cluster unito dopo il merge, il leader del cluster che ha cambiato colore/che ha fatto richiesta al server per primo per l'operazione di merge.
+Questa soluzione rimuove la complessit\`a aggiuntiva di dover confrontare l'id per mantenere il minore ed inoltre si presta ad essere pi\`u naturale per il sistema, sia da un punto di vista di priorit\`a della richiesta (minor timestamp) e quindi rimanendo in linea con le altre scelte implementative prese, sia per una correttezza logica. Un cluster viene considerato molto attivo quando vengono effettuate molte operazioni di cambio colore e considerando che ogni nodo della matrice ha la stessa probabilit\`a di essere scelto, una maggiore attivit\`a implica probabilisticamente una dimensione maggiore del cluster (i.e. pi\`u nodi al suo interno). Unendo i cluster adiacenti che condividono il colore col cluster che effettua la richiesta di merge per primo, significa che probabilisticamente si stanno unendo cluster di dimensione minore con uno maggiore e ci\`o implica un minor numero di operazioni di aggiornamento delle strutture dati.
 
 \paragraph{Failover e rielezione}
-Nel caso in cui il leader selezionato fallisca, \`e previsto un meccanismo di failover automatico. I nodi del cluster avviano un'elezione per scegliere un nuovo leader, basata nuovamente sul criterio dell'ID pi\`u basso tra i nodi rimanenti. Questo processo garantisce che il cluster possa continuare a funzionare correttamente anche in presenza di guasti.
+Nel caso in cui il leader selezionato fallisca, \`e previsto un meccanismo di failover automatico, che garantisce che il cluster possa continuare a funzionare correttamente anche in presenza di guasti. I nodi del cluster avviano un'elezione per scegliere un nuovo leader, basata nuovamente sul criterio dell'ID pi\`u basso tra i nodi rimanenti. Per la rielezione questa scelta si presta per essere la pi\`u conveniente in quanto la lista dei nodi nel cluster (\texttt{cluster\_nodes}) \`e ordinata crescentemente, pertanto \`e semplicemente necessario estrarre il primo nodo della lista. Inoltre se vediamo il fallimento di un leader come fallimento dell'intero cluster in quanto suo rappresentante, l'operazione di rielezione \`e al pari di operazione di setup di un singolo cluster, rispettando cos\`i le precedenti scelte implementative.
 
-\newpage
 \subsection{Vantaggi della soluzione proposta}
 
 La soluzione scelta presenta diversi vantaggi:
@@ -793,31 +789,32 @@ La soluzione proposta, basata sul trattamento dei cluster come nodi in un grafo 
 
 \section{Linguaggi di programmazione utilizzati}
 
-Per questo progetto distribuito sono stati utilizzati due linguaggi di programmazione principali: \textbf{Erlang} e \textbf{Python}. Ciascuno di essi è stato scelto per le sue caratteristiche specifiche, che permettono di risolvere efficacemente problemi di distribuzione e visualizzazione.
+Per questo progetto distribuito sono stati utilizzati due linguaggi di programmazione principali: \textbf{Erlang} e \textbf{Python}. Ciascuno di essi \`e stato scelto per le sue caratteristiche specifiche, che permettono di risolvere efficacemente problemi di distribuzione e visualizzazione.
 
 \subsection{Erlang}
 
-\textbf{Erlang} è stato scelto per la logica distribuita e la gestione dei nodi nel sistema, grazie alla sua robustezza e al supporto nativo per la concorrenza e la tolleranza ai guasti. Erlang è particolarmente adatto per applicazioni distribuite e fault-tolerant, ed è ampiamente utilizzato in ambiti come le telecomunicazioni e i sistemi di backend ad alta disponibilità.
+\textbf{Erlang} \`e stato scelto per la logica distribuita e la gestione dei nodi nel sistema, grazie alla sua robustezza e al supporto nativo per la concorrenza e la tolleranza ai guasti. Erlang \`e particolarmente adatto per applicazioni distribuite e fault-tolerant, ed \`e ampiamente utilizzato in ambiti come le telecomunicazioni e i sistemi di backend ad alta disponibilità.
 
 \begin{itemize}
-    \item \textbf{Gestione dei processi}: in Erlang, ogni nodo e leader è gestito come un processo indipendente. Questo permette al sistema di scalare facilmente e di mantenere l'isolamento dei fallimenti tra i nodi.
-    \item \textbf{Pattern matching e concorrenza}: Erlang utilizza il pattern matching per la gestione dei messaggi e le strutture dati, facilitando la scrittura di codice conciso e mantenibile. La concorrenza è una funzionalità nativa del linguaggio, che permette ai processi di comunicare tramite messaggi in maniera asincrona.
-    \item \textbf{Semplicità e resilienza}: Erlang implementa una semplice struttura di error handling in cui, invece di cercare di prevenire ogni possibile errore, i processi possono fallire e riavviarsi autonomamente. Questo modello “let it crash” è efficace in sistemi distribuiti dove i singoli componenti devono rimanere resilienti.
+    \item \textbf{Gestione dei processi}: in Erlang, ogni nodo e leader \`e gestito come un processo indipendente. Questo permette al sistema di scalare facilmente e di mantenere l'isolamento dei fallimenti tra i nodi.
+    \item \textbf{Pattern matching e concorrenza}: Erlang utilizza il pattern matching per la gestione dei messaggi e le strutture dati, facilitando la scrittura di codice conciso e mantenibile. La concorrenza \`e una funzionalità nativa del linguaggio, che permette ai processi di comunicare tramite messaggi in maniera asincrona.
+    \item \textbf{Semplicità e resilienza}: Erlang implementa una semplice struttura di error handling in cui, invece di cercare di prevenire ogni possibile errore, i processi possono fallire e riavviarsi autonomamente. Questo modello “let it crash” \`e efficace in sistemi distribuiti dove i singoli componenti devono rimanere resilienti.
 \end{itemize}
 
-Erlang è quindi stato impiegato per la creazione e gestione dei nodi, la comunicazione tra essi e per mantenere il server centrale che coordina i leader e gestisce la propagazione dei messaggi.
+Erlang \`e quindi stato impiegato per la creazione e gestione dei nodi, la comunicazione tra essi e per mantenere il server centrale che coordina i leader e gestisce la propagazione dei messaggi.
 
 \subsection{Python}
 
-\textbf{Python} è stato scelto per la visualizzazione dei dati e l’interfaccia utente. Con la libreria \texttt{Flask}, è stato possibile implementare un server web per mostrare la matrice dei nodi e permettere l'interazione dell'utente, mentre \texttt{Matplotlib} è stato utilizzato per la grafica della griglia.
+\textbf{Python} \`e stato scelto per la visualizzazione dei dati e l’interfaccia utente. Con la libreria \texttt{Flask}, \`e stato possibile implementare un server web per mostrare la matrice dei nodi e permettere l'interazione dell'utente, mentre \texttt{Matplotlib} \`e stato utilizzato per la grafica della griglia.
 
+\newpage
 \begin{itemize}
     \item \textbf{Visualizzazione e interfaccia web}: Python, con \texttt{Flask} e \texttt{Matplotlib}, permette di creare interfacce web e rappresentazioni grafiche dei nodi in modo rapido e flessibile.
     \item \textbf{Aggiornamenti in tempo reale}: il supporto di \texttt{Flask-SocketIO} consente la comunicazione in tempo reale tra il backend e l'interfaccia utente, permettendo di aggiornare la visualizzazione della griglia dei nodi ogni volta che avvengono modifiche nel sistema.
     \item \textbf{Facilità d'integrazione con Erlang}: Python comunica con Erlang tramite un server TCP implementato in Erlang stesso. Questo approccio rende semplice l'integrazione e il passaggio di messaggi per operazioni come il cambio di colore dei nodi.
 \end{itemize}
 
-Python è quindi stato utilizzato come componente di frontend, fornendo una rappresentazione visiva intuitiva e permettendo l'interazione con i nodi per modificarne lo stato in tempo reale.
+Python \`e quindi stato utilizzato come componente di frontend, fornendo una rappresentazione visiva intuitiva e permettendo l'interazione con i nodi per modificarne lo stato in tempo reale.
 
 \subsection{Benefici della combinazione di Erlang e Python}
 
@@ -831,15 +828,18 @@ Questo approccio ha consentito di mantenere un sistema distribuito robusto e all
 
 \section{Comandi principali}
 
-In questa sezione sono descritti i comandi principali per avviare e configurare il sistema distribuito Flood-Fill. È possibile eseguire il sistema utilizzando due o tre shell separate, a seconda delle esigenze:
-- \textbf{Con due shell}: ideale per un uso manuale, dove una shell avvia il backend Erlang e l’altra avvia il server Flask per l’interfaccia web.
-- \textbf{Con tre shell}: utile per test automatizzati, aggiungendo una shell dedicata agli script di testing, che inviano richieste al sistema per verificare la correttezza e la resilienza in tempo reale.
+In questa sezione sono descritti i comandi principali per avviare e configurare il sistema distribuito Flood-Fill. \`E possibile eseguire il sistema utilizzando due o tre shell separate, a seconda delle esigenze:
+\begin{itemize}
+  \item \textbf{Con due shell}: ideale per un uso manuale, dove una shell avvia il backend Erlang e l’altra avvia il server Flask per l’interfaccia web.
+  \item \textbf{Con tre shell}: utile per test automatizzati, aggiungendo una shell dedicata agli script di testing, che inviano richieste al sistema per verificare la correttezza e la resilienza in tempo reale.
+\end{itemize}
 
 I comandi descritti possono essere eseguiti sia manualmente per monitorare il sistema in modo interattivo, sia con script automatici di testing per simulare carichi di lavoro o condizioni specifiche.
 
 \subsection{Avvio del backend Erlang}
 Questo comando compila e avvia il backend, configurando una griglia di nodi e assegnando una porta per la comunicazione. 
 
+\newpage
 \begin{tcolorbox}[title=Comandi di avvio in Erlang]
 \begin{verbatim}
 ./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
@@ -863,8 +863,8 @@ python3 grid_visualizer.py --debug <DEBUG_MODE> --port <PORTA>
 
 \noindent Dove:
 \begin{itemize}
-    \item \texttt{<DEBUG\_MODE>} è \texttt{True} per attivare la modalità di debug, utile durante la fase di sviluppo.
-    \item \texttt{<PORTA>} è la porta fornita dal backend Erlang per la comunicazione.
+    \item \texttt{<DEBUG\_MODE>} \`e \texttt{True} per attivare la modalità di debug, utile durante la fase di sviluppo.
+    \item \texttt{<PORTA>} \`e la porta fornita dal backend Erlang per la comunicazione.
 \end{itemize}
 
 \subsection{Generazione di colori e operazioni casuali}
@@ -879,7 +879,7 @@ python3 generate_changes_rand.py --rows <ROWS> --columns <COLUMNS>
 
 \noindent Dove:
 \begin{itemize}
-    \item \texttt{<NUMBER\_OPERATIONS>} è il numero di cambi di colore casuali da generare.
+    \item \texttt{<NUMBER\_OPERATIONS>} \`e il numero di cambi di colore casuali da generare.
 \end{itemize}
 
 \subsection{Esecuzione di test automatici}
@@ -894,9 +894,9 @@ python3 script.py
 \noindent Questi test permettono di osservare il comportamento del sistema in condizioni di carico e di verificare la consistenza delle operazioni di cambio colore e la resilienza del sistema in caso di errori.
 
 \subsection{Esecuzione in shell multiple}
-Per eseguire il sistema con \textbf{due shell}, avvia il backend Erlang nella prima shell e il server Flask nella seconda. Questa configurazione è adatta per un uso manuale, poiché consente di monitorare i log e l’interfaccia web direttamente.
+Per eseguire il sistema con \textbf{due shell}, avvia il backend Erlang nella prima shell e il server Flask nella seconda. Questa configurazione \`e adatta per un uso manuale, poiché consente di monitorare i log e l’interfaccia web direttamente.
 
-Per eseguire il sistema con \textbf{tre shell}, usa una terza shell per avviare script di test automatici. Questo approccio è utile per verificare la robustezza del sistema, poiché permette di generare condizioni di carico e testare la propagazione dei cambi di colore tra i nodi.
+Per eseguire il sistema con \textbf{tre shell}, usa una terza shell per avviare script di test automatici. Questo approccio \`e utile per verificare la robustezza del sistema, poiché permette di generare condizioni di carico e testare la propagazione dei cambi di colore tra i nodi.
 
 \section{Records}
 
@@ -961,12 +961,12 @@ Il record \texttt{event} viene usato per date una struttura alle informazioni su
 
 \subsection{\texttt{node.erl}}
 
-Il modulo \texttt{node.erl} è progettato per gestire la creazione, la gestione e la comunicazione tra i nodi in una rete distribuita. Esso permette di coordinare dinamicamente le operazioni sui nodi e sui leader all'interno del sistema, gestendo anche eventi come cambi di colore, elezione di nuovi leader e fusioni di cluster.
+Il modulo \texttt{node.erl} \`e progettato per gestire la creazione, la gestione e la comunicazione tra i nodi in una rete distribuita. Esso permette di coordinare dinamicamente le operazioni sui nodi e sui leader all'interno del sistema, gestendo anche eventi come cambi di colore, elezione di nuovi leader e fusioni di cluster.
 
 Il modulo contiene le seguenti funzioni principali:
 
 \begin{itemize}
-    \item \texttt{new\_node/8}: questa funzione crea un nuovo nodo con parametri specifici come la posizione, il leader, i vicini e altre proprietà essenziali. Ogni nodo è dotato di un identificativo unico (PID) e può interagire con i vicini e il leader assegnato.
+    \item \texttt{new\_node/8}: questa funzione crea un nuovo nodo con parametri specifici come la posizione, il leader, i vicini e altre proprietà essenziali. Ogni nodo \`e dotato di un identificativo unico (PID) e può interagire con i vicini e il leader assegnato.
 
     \item \texttt{new\_leader/5}: crea e configura un nodo come leader. Un leader coordina i nodi all'interno di un cluster, assegnandosi il proprio PID come leader ID. La funzione inizializza inoltre attributi specifici come il colore del cluster e le informazioni sui cluster adiacenti.
 
@@ -979,7 +979,7 @@ Il modulo contiene le seguenti funzioni principali:
 \end{itemize}
 
 \noindent
-Lo scopo del modulo \texttt{node.erl} è fornire una struttura robusta per la gestione di una rete distribuita di nodi, dove ciascun nodo può essere configurato come nodo standard o leader. La flessibilità del modulo consente di implementare dinamicamente una rete in cui i nodi possono cambiare colore, coordinarsi con i leader e gestire le proprie interazioni in modo distribuito. Questo modulo abilita la gestione dinamica dei cluster e la resilienza a eventuali errori o modifiche, come l'elezione di nuovi leader e la fusione di cluster adiacenti. In questo modo, è possibile mantenere la consistenza dei colori e la corretta organizzazione dei nodi anche in scenari complessi.
+Lo scopo del modulo \texttt{node.erl} \`e fornire una struttura robusta per la gestione di una rete distribuita di nodi, dove ciascun nodo può essere configurato come nodo standard o leader. La flessibilità del modulo consente di implementare dinamicamente una rete in cui i nodi possono cambiare colore, coordinarsi con i leader e gestire le proprie interazioni in modo distribuito. Questo modulo abilita la gestione dinamica dei cluster e la resilienza a eventuali errori o modifiche, come l'elezione di nuovi leader e la fusione di cluster adiacenti. In questo modo, \`e possibile mantenere la consistenza dei colori e la corretta organizzazione dei nodi anche in scenari complessi.
 
 \subsection{\texttt{event.erl}}
 
@@ -998,16 +998,16 @@ Le principali responsabilità del modulo includono:
 Le principali funzioni del modulo sono le seguenti:
 
 \begin{itemize}
-    \item \texttt{new/3}: crea un nuovo evento con il timestamp attuale. Gli attributi dell'evento includono il tipo, il colore e il leader che ha originato l'evento. Questa funzione è utilizzata per la generazione di eventi in tempo reale.
+    \item \texttt{new/3}: crea un nuovo evento con il timestamp attuale. Gli attributi dell'evento includono il tipo, il colore e il leader che ha originato l'evento. Questa funzione \`e utilizzata per la generazione di eventi in tempo reale.
 
     \item \texttt{new\_with\_timestamp/4}: consente la creazione di un evento con un timestamp specificato, utile in contesti di testing o per ricostruire eventi passati. L'evento conserva le stesse proprietà di \texttt{new/3}, ma accetta un timestamp definito dall'utente.
 
-    \item \texttt{greater/2}: confronta due eventi per stabilire il loro ordine temporale. Se il primo evento ha un timestamp più recente del secondo, viene considerato ``maggiore''. In caso di parità di timestamp, l'ID unico dell'evento è usato per determinare l'ordine. Questa funzione è essenziale per gestire correttamente la sequenza degli eventi nel sistema distribuito.
+    \item \texttt{greater/2}: confronta due eventi per stabilire il loro ordine temporale. Se il primo evento ha un timestamp più recente del secondo, viene considerato ``maggiore''. In caso di parità di timestamp, l'ID unico dell'evento \`e usato per determinare l'ordine. Questa funzione \`e essenziale per gestire correttamente la sequenza degli eventi nel sistema distribuito.
 
 \end{itemize}
 
 \noindent
-Il modulo \texttt{event.erl} è fondamentale per garantire una gestione ordinata e coerente degli eventi all'interno del sistema distribuito, assicurando che le azioni vengano processate nel corretto ordine temporale, anche in situazioni di conflitto. Utilizzando i timestamp e gli ID unici, il modulo permette al sistema di risolvere i conflitti e mantenere una visione sincronizzata dello stato distribuito.
+Il modulo \texttt{event.erl} \`e fondamentale per garantire una gestione ordinata e coerente degli eventi all'interno del sistema distribuito, assicurando che le azioni vengano processate nel corretto ordine temporale, anche in situazioni di conflitto. Utilizzando i timestamp e gli ID unici, il modulo permette al sistema di risolvere i conflitti e mantenere una visione sincronizzata dello stato distribuito.
 
 \subsection{\texttt{operation.erl}}
 
@@ -1016,7 +1016,7 @@ Il modulo \texttt{operation.erl} fornisce una serie di funzioni per la gestione 
 Le principali funzionalità del modulo sono:
 
 \begin{itemize}
-    \item \textbf{Gestione dei cambi di colore}: funzioni come \texttt{change\_color/2} e \texttt{do\_change\_color/2} permettono di aggiornare il colore di un leader e di propagare questa informazione ai cluster adiacenti, mantenendo la consistenza dei colori. Questo è utile per evitare conflitti tra i cluster.
+    \item \textbf{Gestione dei cambi di colore}: funzioni come \texttt{change\_color/2} e \texttt{do\_change\_color/2} permettono di aggiornare il colore di un leader e di propagare questa informazione ai cluster adiacenti, mantenendo la consistenza dei colori. Questo \`e utile per evitare conflitti tra i cluster.
 
     \item \textbf{Utilità per la fusione dei cluster}: funzioni come \texttt{merge\_adjacent\_clusters/4} e \texttt{wait\_for\_merge\_response/4} gestiscono la fusione di cluster adiacenti quando questi condividono lo stesso colore. Queste funzioni aggiornano correttamente la lista dei nodi e dei cluster adiacenti.
 
@@ -1034,14 +1034,14 @@ Le principali funzioni del modulo sono le seguenti:
 
     \item \texttt{remove\_cluster\_from\_adjacent/2}: rimuove un cluster specifico dalla lista dei cluster adiacenti, utile in caso di guasto del leader.
 
-    \item \texttt{promote\_to\_leader/5}: promuove un nodo a leader, inizializzando le sue informazioni di cluster e di adiacenza. È una funzione di recupero fondamentale per garantire che i cluster rimangano operativi anche in caso di guasti.
+    \item \texttt{promote\_to\_leader/5}: promuove un nodo a leader, inizializzando le sue informazioni di cluster e di adiacenza. \`e una funzione di recupero fondamentale per garantire che i cluster rimangano operativi anche in caso di guasti.
 
     \item \texttt{send\_periodic\_updates/1} e \texttt{broadcast\_leader\_update/1}: invia periodicamente aggiornamenti sul colore e sul leader corrente a tutti i nodi del cluster e ai cluster adiacenti, garantendo una sincronizzazione continua delle informazioni.
 
 \end{itemize}
 
 \noindent
-Il modulo \texttt{operation.erl} è essenziale per il mantenimento dell'integrità e della coerenza di un sistema distribuito basato su cluster, gestendo in modo dinamico i colori dei cluster, la fusione tra cluster adiacenti e il recupero da guasti dei leader. Grazie alle sue funzioni, il sistema può adattarsi ai cambiamenti e mantenere una rete di comunicazione affidabile tra i cluster.
+Il modulo \texttt{operation.erl} \`e essenziale per il mantenimento dell'integrità e della coerenza di un sistema distribuito basato su cluster, gestendo in modo dinamico i colori dei cluster, la fusione tra cluster adiacenti e il recupero da guasti dei leader. Grazie alle sue funzioni, il sistema può adattarsi ai cambiamenti e mantenere una rete di comunicazione affidabile tra i cluster.
 
 \subsection{\texttt{server.erl}}
 
@@ -1067,7 +1067,7 @@ Il modulo \texttt{server.erl} implementa il processo server per la gestione e il
 \end{itemize}
 
 \noindent
-Il modulo \texttt{server.erl} è fondamentale per gestire la configurazione iniziale del sistema, monitorare i leader per prevenire guasti e assicurare che ogni cluster mantenga un colore univoco rispetto ai cluster adiacenti. Le funzioni di salvataggio in JSON permettono di mantenere uno snapshot dello stato corrente del sistema, rendendolo pronto per il debug e il recupero.
+Il modulo \texttt{server.erl} \`e fondamentale per gestire la configurazione iniziale del sistema, monitorare i leader per prevenire guasti e assicurare che ogni cluster mantenga un colore univoco rispetto ai cluster adiacenti. Le funzioni di salvataggio in JSON permettono di mantenere uno snapshot dello stato corrente del sistema, rendendolo pronto per il debug e il recupero.
 
 \subsection{\texttt{setup.erl}}
 
@@ -1091,7 +1091,7 @@ Il modulo \texttt{setup.erl} implementa la fase di configurazione per un sistema
 \end{itemize}
 
 \noindent
-Il modulo \texttt{setup.erl} è progettato per essere utilizzato in ambienti distribuiti, dove ogni nodo opera in modo indipendente ma deve collaborare con altri per formare cluster, assegnare leader e propagare i dati di connettività. La gestione dei timeout consente al modulo di rispondere a nodi non disponibili, garantendo robustezza durante la configurazione iniziale. Questo modulo si affida a funzioni di utilità come \texttt{utils:save\_data/1} per gestire compiti comuni e per migliorare l'efficienza.
+Il modulo \texttt{setup.erl} \`e progettato per essere utilizzato in ambienti distribuiti, dove ogni nodo opera in modo indipendente ma deve collaborare con altri per formare cluster, assegnare leader e propagare i dati di connettività. La gestione dei timeout consente al modulo di rispondere a nodi non disponibili, garantendo robustezza durante la configurazione iniziale. Questo modulo si affida a funzioni di utilità come \texttt{utils:save\_data/1} per gestire compiti comuni e per migliorare l'efficienza.
 
 \subsection{\texttt{start\_system.erl}}
 
@@ -1117,12 +1117,12 @@ Il modulo \texttt{start\_system.erl} gestisce l'inizializzazione e la configuraz
 
 \paragraph{Precondizioni e postcondizioni:}
 \begin{itemize}
-    \item \textbf{Precondizioni}: devono essere specificate le dimensioni della griglia (N, M). Se \texttt{FromFile} è impostato su \texttt{true}, deve essere presente un file valido con i colori.
+    \item \textbf{Precondizioni}: devono essere specificate le dimensioni della griglia (N, M). Se \texttt{FromFile} \`e impostato su \texttt{true}, deve essere presente un file valido con i colori.
     \item \textbf{Postcondizioni}: un processo server viene creato e tutti i nodi sono inizializzati con i loro colori e vicini. I dati finali della configurazione dei nodi vengono salvati in un file JSON per uso futuro.
 \end{itemize}
 
 \noindent
-Il modulo \texttt{start\_system.erl} è utilizzato come punto d'ingresso per configurare il sistema, incluso server, nodi e vicini, e viene invocato con le dimensioni desiderate della griglia. Questo modulo supporta sia la configurazione tramite un file di colori che tramite una palette predefinita, rendendolo flessibile per vari scenari di inizializzazione.
+Il modulo \texttt{start\_system.erl} \`e utilizzato come punto d'ingresso per configurare il sistema, incluso server, nodi e vicini, e viene invocato con le dimensioni desiderate della griglia. Questo modulo supporta sia la configurazione tramite un file di colori che tramite una palette predefinita, rendendolo flessibile per vari scenari di inizializzazione.
 
 \subsection{\texttt{tcp\_server.erl}}
 
@@ -1148,7 +1148,7 @@ Il modulo \texttt{tcp\_server.erl} implementa un server TCP che riceve comandi d
 \end{itemize}
 
 \noindent
-Il modulo \texttt{tcp\_server.erl} fornisce un'interfaccia per la gestione dinamica del sistema distribuito, consentendo modifiche in tempo reale ai nodi attraverso comandi client. È ideale per ambienti in cui è necessario interagire e monitorare un sistema distribuito di nodi con feedback immediato.
+Il modulo \texttt{tcp\_server.erl} fornisce un'interfaccia per la gestione dinamica del sistema distribuito, consentendo modifiche in tempo reale ai nodi attraverso comandi client. \`E ideale per ambienti in cui \`e necessario interagire e monitorare un sistema distribuito di nodi con feedback immediato.
 
 \subsection{\texttt{utils.erl}}
 
@@ -1176,7 +1176,7 @@ Il modulo \texttt{utils.erl} contiene funzioni di utilità per la gestione e l'e
 \end{itemize}
 
 \noindent
-Il modulo \texttt{utils.erl} fornisce strumenti essenziali per la gestione e il controllo del sistema, semplificando le operazioni comuni e garantendo la consistenza dei dati nei nodi e cluster distribuiti. È fondamentale per la manutenzione e la scalabilità del sistema.
+Il modulo \texttt{utils.erl} fornisce strumenti essenziali per la gestione e il controllo del sistema, semplificando le operazioni comuni e garantendo la consistenza dei dati nei nodi e cluster distribuiti. \`E fondamentale per la manutenzione e la scalabilità del sistema.
 
 \section{Scripts}\label{sec:scripts}
 
@@ -1215,7 +1215,7 @@ Lo script Python \texttt{grid\_visualizer.py} implementa una visualizzazione gra
 
 \subsection{\texttt{generate\_changes\_rand.py}}\label{sec:random_changes}
 
-Il file \texttt{generate\_changes\_rand.py} è un utile script Python progettato per gestire un sistema distribuito di nodi, permettendo di modificare colori e gestire processi in modo programmato e casuale. Lo script interagisce con un server Erlang tramite connessioni TCP, inviando comandi per modificare i colori dei nodi o terminare processi, facilitando così la gestione e il testing di configurazioni di cluster distribuiti.
+Il file \texttt{generate\_changes\_rand.py} \`e un utile script Python progettato per gestire un sistema distribuito di nodi, permettendo di modificare colori e gestire processi in modo programmato e casuale. Lo script interagisce con un server Erlang tramite connessioni TCP, inviando comandi per modificare i colori dei nodi o terminare processi, facilitando così la gestione e il testing di configurazioni di cluster distribuiti.
 
 \paragraph{Funzionalità Principali:}
 \begin{itemize}
@@ -1249,7 +1249,7 @@ Il file \texttt{generate\_changes\_rand.py} è un utile script Python progettato
 
 \subsection{\texttt{script.py}}\label{sec:script}
 
-Il file \texttt{script.py} è un script Python utilizzato per gestire e testare una griglia di nodi in un sistema distribuito. Lo script è particolarmente utile per verificare la reattività e la coerenza del sistema durante operazioni di cambio colore e condizioni di merge. Comunica con un server Erlang tramite TCP, consentendo di inviare richieste di cambio colore ai nodi e di eseguire scenari di test specifici per analizzare la stabilità del sistema in caso di aggiornamenti simultanei o condizioni temporali complesse.
+Il file \texttt{script.py} \`e un script Python utilizzato per gestire e testare una griglia di nodi in un sistema distribuito. Lo script \`e particolarmente utile per verificare la reattività e la coerenza del sistema durante operazioni di cambio colore e condizioni di merge. Comunica con un server Erlang tramite TCP, consentendo di inviare richieste di cambio colore ai nodi e di eseguire scenari di test specifici per analizzare la stabilità del sistema in caso di aggiornamenti simultanei o condizioni temporali complesse.
 
 \paragraph{Funzionalit\`a principali:}
 \begin{itemize}
@@ -1269,7 +1269,7 @@ Il file \texttt{script.py} è un script Python utilizzato per gestire e testare 
 
 
 \paragraph{Utilizzo:}
-Per utilizzare lo script, è possibile eseguirlo e seguire le istruzioni a schermo per specificare dimensioni della matrice, resettare il database e configurare la porta del server.
+Per utilizzare lo script, \`e possibile eseguirlo e seguire le istruzioni a schermo per specificare dimensioni della matrice, resettare il database e configurare la porta del server.
 Una volta configurato, l’utente può scegliere tra i vari casi di test da eseguire.
 
 Esempio di utilizzo:
@@ -1283,23 +1283,23 @@ Ogni test fornisce uno scenario unico per valutare la robustezza del sistema dis
 
 \section{File di backup e logging}
 
-Nel sistema distribuito progettato, vengono generati diversi file per memorizzare localmente i dati di ciascun nodo e tracciare le operazioni eseguite. Di seguito è riportata una descrizione dettagliata di ciascun file.
+Nel sistema distribuito progettato, vengono generati diversi file per memorizzare localmente i dati di ciascun nodo e tracciare le operazioni eseguite. Di seguito \`e riportata una descrizione dettagliata di ciascun file.
 
-\paragraph{\texttt{data/nodes\_data.json}} Questo file contiene le informazioni dei nodi creati durante l'inizializzazione del sistema. Ogni nodo è rappresentato in una struttura JSON che include:
+\paragraph{\texttt{data/nodes\_data.json}} Questo file contiene le informazioni dei nodi creati durante l'inizializzazione del sistema. Ogni nodo \`e rappresentato in una struttura JSON che include:
 \begin{itemize}
     \item \texttt{pid}: ID del processo Erlang che rappresenta il nodo.
     \item \texttt{x}: coordinata orizzontale del nodo nella griglia.
     \item \texttt{y}: coordinata verticale del nodo nella griglia.
 \end{itemize}
-Questo file è utile per tenere traccia della disposizione dei nodi e delle loro caratteristiche di base.
+Questo file \`e utile per tenere traccia della disposizione dei nodi e delle loro caratteristiche di base.
 
-\paragraph{\texttt{data/leaders\_data.json}} Questo file memorizza i dati di ciascun leader, incluse le informazioni sui cluster associati. Ogni leader è rappresentato da una struttura JSON che include:
+\paragraph{\texttt{data/leaders\_data.json}} Questo file memorizza i dati di ciascun leader, incluse le informazioni sui cluster associati. Ogni leader \`e rappresentato da una struttura JSON che include:
 \begin{itemize}
     \item \texttt{color}: il colore assegnato al leader, che identifica il cluster.
-    \item \texttt{adjacent\_clusters}: una lista di cluster adiacenti rappresentata da strutture \texttt{\{pid, color, leader\_id\}}, dove \texttt{leader\_id} è l'ID del leader del cluster adiacente, \texttt{pid} rappresenta un nodo vicino, e \texttt{color} è il colore associato a quel cluster.
+    \item \texttt{adjacent\_clusters}: una lista di cluster adiacenti rappresentata da strutture \texttt{\{pid, color, leader\_id\}}, dove \texttt{leader\_id} \`e l'ID del leader del cluster adiacente, \texttt{pid} rappresenta un nodo vicino, e \texttt{color} \`e il colore associato a quel cluster.
     \item \texttt{nodes}: una lista degli ID di processo dei nodi appartenenti al cluster del leader.
 \end{itemize}
-Questo file è utilizzato per visualizzare la struttura dei cluster e le loro relazioni, rappresentando la conoscenza del server sui leader e i loro cluster.
+Questo file \`e utilizzato per visualizzare la struttura dei cluster e le loro relazioni, rappresentando la conoscenza del server sui leader e i loro cluster.
 
 \paragraph{\texttt{data/server\_log.txt}} Questo file registra tutte le operazioni eseguite dal server durante il funzionamento del sistema, complete di timestamp e messaggi descrittivi. Le operazioni principali comprendono:
 \begin{itemize}
@@ -1307,7 +1307,7 @@ Questo file è utilizzato per visualizzare la struttura dei cluster e le loro re
     \item Configurazione di un nodo o di un leader.
     \item Avvio delle diverse fasi del sistema.
 \end{itemize}
-Questo log è utile per il debug e per monitorare lo stato del sistema nel tempo.
+Questo log \`e utile per il debug e per monitorare lo stato del sistema nel tempo.
 
 \paragraph{\texttt{DB/\{X\}\_\{Y\}/data.json}} Ogni nodo e leader ha un file in questa directory che memorizza le informazioni locali. Per un nodo normale, il file contiene le stesse informazioni di \texttt{nodes\_data.json}; per un leader, include i dati di \texttt{leaders\_data.json}. La struttura comprende:
 \begin{itemize}
@@ -1404,6 +1404,10 @@ Per motivi di tempistiche non \`e stato possibile approfondire i test sulle perf
 
 \chapter{Conclusioni}
 
+In conclusione, il progetto descritto in questa documentazione si adatta perfettamente al problema del \textit{Flood-Fill} (vedi sezione~\ref{sec:descrizione_problema}) e come descritto nei casi di test, mostrato nei video allegati e come \`e possibile riverificare col codice fornito, il sistema distribuito implementato rispecchia le richieste presentate dal problema.
+La soluzione implementativa proposta spicca per robustezza nei casi di concorrenza in quanto come descritto ogni caso \`e stato analizzato e verificato in profondit\`a.
+Nonostante siano stati apportati minori cambiamenti rispetto alle decisioni iniziali nella struttura, possiamo affermare con certezza che la fase iniziale di analisi e progettazione del sistema si sia rivelata decisiva e sia stata individuata una soluzione corretta. Questo si \`e dimostrato un aspetto fondamentale per il completamento del progetto nei tempi previsti, senza lasciare nulla da parte.
+Questo non implica che il progetto sia perfetto, in quanto siamo consci delle limitazioni in termini di complessit\`a delle performance, tuttavia lo sviluppo di un algoritmo ottimizzato per la fase di setup avrebbe dilatato troppo le tempistiche di consegna. Si \`e deciso quindi di dare la priotit\`a al rispetto dei requisiti descritti, alla correttezza del funzionamento, alla completezza dei test e alle tempistiche di consegna.
 
 
 \end{document}
