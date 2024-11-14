@@ -383,7 +383,7 @@ Aprire tre terminali (shell) e navigare nei seguenti percorsi:
 
 ### 1. Generare Operazioni Casuali
 
-Nel primo terminale, eseguire il seguente comando per generare operazioni casuali:
+Nel secondo terminale, eseguire il seguente comando per generare operazioni casuali:
 ```
 python3 generate_changes_rand.py --rows <ROWS> --columns <COLUMNS> --operations <NUMBER_OPERATIONS>
 ```
@@ -397,7 +397,7 @@ Questo comando genererà i colori per una matrice 7x7 e 10 operazioni di ricolor
 
 ### 2. Avviare il Backend Erlang
 
-Nel secondo terminale, eseguire:
+Nel primo terminale, eseguire:
 ```
 ./compile_and_run.sh <ROWS> <COLUMNS> <FROM_FILE>
 ```
