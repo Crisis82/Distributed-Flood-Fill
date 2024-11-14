@@ -322,7 +322,7 @@ In questo modo, ogni terminale sarà pronto per l'avvio dei componenti necessari
 
 ### 1. Avviare lo Script Python per i Test Automatici
 
-Nel primo terminale, eseguire il seguente comando:
+Nel secondo terminale, eseguire il seguente comando:
 
 ```bash
 python3 script.py
@@ -334,7 +334,7 @@ Questo script genererà inizialmente i colori per una matrice 5x5 che verrà uti
 
 ### 2. Avviare il Backend Erlang
 
-Nel secondo terminale, eseguire:
+Nel primo terminale, eseguire:
 
 ```bash
 ./compile_and_run.sh 5 5 true
