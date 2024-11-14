@@ -97,8 +97,6 @@ def generate_colors_file(N, M, random_colors):
 
     print("\nBefore running the script, execute the following commands in separate terminals:\n")
     print(f"./compile_and_run.sh {N} {M} true")
-    print("\nThen, execute the following command in another terminal:\n")
-    print("./start_visualizer.sh")
     
     input("\nPress Enter once you've completed the commands in the Erlang terminal to continue...")
 

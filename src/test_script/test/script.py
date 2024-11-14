@@ -125,8 +125,7 @@ def generate_colors_file(N, M, random_colors):
     print(f"File colors.txt generated with {N}*{M} colors.")
 
     print("\nEnsure you execute the following in another terminal:\n")
-    print(f"./compile_and_run.sh {N} {M} true")
-    print("\nThen execute:\n./start_visualizer.sh")
+    print(f"./compile_and_run.sh {N} {M} true\n")
     
 def load_leaders_data():
     """
@@ -306,32 +305,6 @@ def case3(PORT):
         send_color_change_request(pid, color, t, PORT)
         time.sleep(1)
 
-# Function to execute a sequence of merges for nodes
-def merge_successivo(PORT):
-    """
-    Sends multiple color change requests to initiate merging operations.
-
-    Preconditions:
-    - `PORT` is the active server port.
-
-    Postconditions:
-    - Initiates merge requests by changing color of several nodes to the same color.
-    - A 0.5-second pause occurs between each operation.
-    """
-    nodes_data = load_nodes_data()
-    
-    operations = [
-        (get_pid_by_coordinates(nodes_data, 1, 1), "pink", datetime.now()),
-        (get_pid_by_coordinates(nodes_data, 2, 2), "pink", datetime.now()),
-        (get_pid_by_coordinates(nodes_data, 5, 4), "pink", datetime.now()),
-        (get_pid_by_coordinates(nodes_data, 4, 5), "pink", datetime.now()),
-    ]
-    
-    for operation in operations:
-        pid, color, t = operation
-        send_color_change_request(pid, color, t, PORT)
-        time.sleep(0.5)
-
 # Function to execute color change during an ongoing merge operation
 def change_color_during_merge(PORT):
     """
@@ -402,9 +375,8 @@ def main():
     print("2. case2")
     print("3. case3")
     print("4. too_old")
-    print("5. merge_successivo")
-    print("6. change_color_during_merge")
-    print("7. doubleMerge")
+    print("5. change_color_during_merge")
+    print("6. doubleMerge")
 
     choice = input("Enter the number of the desired operation: ")
     if choice == "1":
@@ -416,10 +388,8 @@ def main():
     elif choice == "4":
         too_old(PORT)
     elif choice == "5":
-        merge_successivo(PORT)
-    elif choice == "6":
         change_color_during_merge(PORT)
-    elif choice == "7":
+    elif choice == "6":
         doubleMerge(PORT)
     else:
         print("Invalid choice. Exiting program.")
