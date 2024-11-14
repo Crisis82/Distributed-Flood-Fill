@@ -1,7 +1,6 @@
 \documentclass[12pt, a4paper]{report}
 
 \input{preamble}
-\usepackage[italian]{babel}
 
 \title{\Huge{Implementazione distribuita dell'algoritmo Flood-Fill}}
 \author{\Large{\textit{Tam Gabriele, Merlo Filippo}}}
@@ -104,7 +103,7 @@ Il progetto si articola in diverse fasi:
 
 \chapter{Analisi}\label{chapter:analisi}
 
-In questo capitolo vengono descritti nel dettaglio i requisiti funzionali e non funzionali di una soluzione per l'implementazione distribuita dell'algoritmo \emph{Flood-Fill}. Questi requisiti guidano lo sviluppo del sistema, specificando le funzionalit\`a richieste e le qualit\`a desiderabili, insieme alle assunzioni e ai vincoli considerati durante l'implementazione.
+In questo capitolo vengono descritti nel dettaglio i requisiti funzionali e non funzionali della soluzione: questi guidano lo sviluppo del sistema, specificando le funzionalit\`a richieste e le qualit\`a desiderabili, insieme alle assunzioni e ai vincoli considerati durante l'implementazione.
 
 \section{Requisiti funzionali}
 
@@ -164,7 +163,7 @@ In questo capitolo viene presentata la progettazione del sistema: verranno anali
 Sono stati considerati due principali approcci:
 
 \begin{enumerate}
-    \item \textbf{Comunicazione diretta tra nodi}: nodi normali e leader comunicano direttamente tra loro per eseguire le operazioni di cambio colore e merge. Cluster adiacenti comunicano direttamente per mezzo dei propri leader.
+    \item \textbf{Comunicazione diretta tra nodi}: ogni nodo comunica unicamente coi propri nodi adiacenti per propagare il cambiamento di colore.
     \item \textbf{Partizionamento del grafo e elezione di nodi leader}: il grafo viene suddiviso in cluster, ciascuno gestito dal proprio nodo leader che ne coordina operazioni (e.g. ricolorazione) ed organizzazione (e.g. fallimento di nodi, merge, $\ldots$).
 \end{enumerate}
 
@@ -223,7 +222,7 @@ L'idea centrale della soluzione \`e la seguente:
 \begin{itemize}
     \item \textbf{Trattamento dei cluster come nodi in un grafo overlay}: ogni cluster viene considerato come un singolo nodo in un grafo overlay, dove i nodi rappresentano i leader dei cluster e gli archi rappresentano le adiacenze tra cluster.
     \item \textbf{Comunicazione tra leader}: i nodi leader mantengono una lista dei leader adiacenti nel grafo overlay, permettendo comunicazioni dirette per le operazioni di merge e coordinamento.
-    \item \textbf{Utilizzo di un server centrale per la sincronizzazione}: implementazione di un server condiviso per gestione, ordinamento e memorizzazione delle operazioni eseguite. Facilita la consistenza e la gestione delle operazioni concorrenti, fornendo al tempo stesso ridondanza sia delle operazioni eseguite (attraverso un file di log) sia dello stato globale della rete.
+    \item \textbf{Utilizzo di un server centrale per la sincronizzazione}: implementazione di un server condiviso per gestione e memorizzazione delle operazioni eseguite. Facilita la consistenza e la gestione delle operazioni concorrenti, fornendo al tempo stesso ridondanza sia delle operazioni eseguite (attraverso un file di log) sia dello stato globale della rete.
 \end{itemize}
 
 \subsection{Setup iniziale}\label{subsec:setup}
@@ -275,7 +274,7 @@ Il sistema \`e ora sincronizzato ed \`e pronto per entrare nella fase operativa.
 
 \paragraph{Complessit\`a della fase di setup}\label{par:complessita_setup}
 
-Di seguito viene riportata l'analisi della complessit\`a delle due fasi.
+Di seguito viene riportata l'analisi della complessit\`a delle tre fasi.
 
 \vspace{-5pt}
 \begin{itemize}
@@ -313,7 +312,6 @@ Di seguito viene riportata l'analisi della complessit\`a delle due fasi.
     \begin{itemize}
         \item La complessit\`a totale della fase di setup \`e dominata dal numero di nodi nell'immagine, quindi \`e $O(N \times M)$.
         \item Sebbene la costruzione della rete overlay abbia una complessit\`a aggiuntiva $O(C)$, essa \`e limitata rispetto al termine dominante $O(N \times M)$.
-        \item Pertanto, la fase di setup risulta essere efficiente e scalabile, anche per immagini di grandi dimensioni.
     \end{itemize}
 \end{itemize}
 
@@ -364,7 +362,7 @@ Il sistema utilizza un server condiviso per garantire la consistenza globale e s
         \caption{Struttura del file di log}
     \end{figure}
 
-    \item \textbf{Stato globale dei cluster}: Una matrice che rappresenta lo stato corrente di tutti i cluster nel sistema. Questa struttura consente al server di tenere traccia dello stato attuale e permette di gestire richieste e operazioni con efficienza. Per ogni leader, vengono mantenute le seguenti informazioni:
+    \item \textbf{Stato globale dei cluster}: rappresenta lo stato corrente di tutti i cluster nel sistema; questa struttura consente al server di tenere traccia dello stato attuale e permette di gestire richieste e operazioni con efficienza. Per ogni leader, vengono mantenute le seguenti informazioni:
     \begin{itemize}
         \item \textbf{Identificatore del leader} (\texttt{leaderID}): l'ID del leader del cluster.
         \item \textbf{Nodi del cluster}: la lista dei nodi che appartengono al cluster.
@@ -441,11 +439,13 @@ Il leader confronta il timestamp del messaggio con quello dell'ultima operazione
 
 \subsubsection{2. Algoritmo di cambio colore}
 \label{subsec:change_color}
-Nell'operazione di cambio colore viene eseguito sia l'aggiornamento effettivo del parametro \texttt{color} del cluster, sia vengono gestite le altre operazioni di controllo ed aggiornamento. Viene infatti aggiornato il campo \texttt{last\_event}, viene controllata la necessit\`a di eseguire il merge ed infine viene inviata una richiesta (\texttt{color\_adj\_update}) di aggiornamento del colore ai cluster adiacenti per le loro liste \texttt{adj\_clusters}. Alla fine dell'operazione viene comunicato al server la terminazione dell'algoritmo.
+Nell'operazione di cambio colore, oltre all'aggiornamento del parametro \texttt{color} del cluster, vengono svolte diverse attività di controllo e sincronizzazione. In particolare, viene aggiornato il campo \texttt{last\_event}, verificata la necessità di un merge e inviata una richiesta di aggiornamento (\texttt{color\_adj\_update}) ai cluster adiacenti per aggiornare le loro liste \texttt{adj\_clusters} con il nuovo colore. Al termine, viene notificata al server la conclusione dell'algoritmo.
+
 
 \subsubsection{3. Algoritmo di merge}
 \label{subsec:merge}
-Il merge tra due (o pi\`u) cluster adiacenti viene eseguito quando il leader di un cluster effettua un cambio di colore e scopre che vi \`e almeno un cluster adiacente che condivide lo stesso colore. Il leader che ha avviato il cambio colore invia la richiesta di merge al leader del cluster adiacente con lo stesso colore.
+Il merge tra due o più cluster adiacenti viene eseguito quando il leader di un cluster, in seguito a un cambio di colore, rileva la presenza di un cluster confinante con lo stesso (nuovo) colore. In questo caso, il leader che ha iniziato il cambio di colore invia una richiesta di merge al leader del cluster adiacente.
+
 
 \subsection{Gestione dei messaggi e della comunicazione}\label{sec:gestione_messaggi}
 
@@ -467,7 +467,7 @@ Nel sistema sono utilizzati diversi tipi di messaggi per coordinare le operazion
     \item \texttt{new\_leader}/\texttt{transform\_to\_normal\_node}: messaggi per eleggere a leader un nodo normale e viceversa.
     \item \texttt{save\_to\_db}: aggiorna stato attuale del cluster nel database del server.
     \item \textbf{Messaggi di conferma (ACK)}: utilizzati per garantire l'affidabilit\`a del sistema, questi messaggi confermano la corretta ricezione delle richieste critiche. In caso di mancata risposta, viene ritentato l'invio (per una spiegazione pi\`u dettagliata \ref{subsec:ack}).
-    \item \textbf{Messaggi di \texttt{heartbeat}}: inviati periodicamente tra le varie componenti del sistema, servono per monitorare la disponibilit\`a e la salute dei nodi (normali e leader), e rilevare eventuali fallimenti (per una spiegazione dettagliata \ref{subsubsec:fallimento_leader}). 
+    \item \textbf{Messaggi di \texttt{heartbeat}}: inviati periodicamente tra le varie componenti del sistema, questi messaggi monitorano la disponibilità e lo stato di salute dei nodi (sia normali che leader), aggiornano le informazioni rilevanti e consentono di individuare eventuali fallimenti (per maggiori dettagli si veda la sezione \ref{subsubsec:fallimento_leader}).
     \item \textbf{Messaggi al server}: i nodi leader comunicano con il server per aggiornare lo stato globale del cluster, registrare le operazioni nel file di log, e segnalare eventuali fusioni, cambi di colore o fallimenti.
 \end{itemize}
 
@@ -496,8 +496,7 @@ Considerando che i messaggi in rete possono subire ritardi e arrivare fuori ordi
 
 Per garantire un ordinamento coerente degli eventi e mantenere la consistenza causale, \`e stato scelto di utilizzare un processo a s\`e stante. Nuovi eventi vengono creati unicamente da questo processo, garantendo che cos\`i che il clock con cui vengono generati i timestamp sia lo stesso, indipendentemente dal quale sia il nodo per cui \`e stato creato l'evento. A differenza di un approccio in cui ogni processo nodo ha il proprio separato clock, l'impiego di un processo separato per gli eventi evita sia possibili casi di asincronia dei clock, sia l'overhead dovuto alla regolare sincronizzazione dei clock.
 
-L'impiego dei timestamp ed id risulta fondamentale per la gestione sia delle richieste di cambio colore che di quelle di merge, poiché, per risolvere casi di concorrenza, viene fatto un ordinamento delle operazioni basato in primis sul tempo di invio della richiesta e secondariamente sull'identificativo dell'operazione, nei particolari casi in cui il tempo sia precisamente lo stesso. L'ordinamento permette sia di gestire in maniera precisa le possibili situazioni di concorrenza affrontate nella sezione \ref{sec
-}, sia di registrare le operazioni in un unico file di log.
+L'impiego dei timestamp ed id risulta fondamentale per la gestione sia delle richieste di cambio colore che di quelle di merge, poiché, per risolvere casi di concorrenza, viene fatto un ordinamento delle operazioni basato in primis sul tempo di invio della richiesta e secondariamente sull'identificativo dell'operazione, nei particolari casi in cui il tempo sia precisamente lo stesso. L'ordinamento permette sia di gestire in maniera precisa le possibili situazioni di concorrenza affrontate nella sezione \ref{subsec:gestione_consistenza}, sia di registrare le operazioni in un unico file di log.
 
 \paragraph{Utilizzo nel sistema}
 
@@ -511,8 +510,7 @@ In caso di conflitti tra operazioni concorrenti (ad esempio, due richieste ricev
 
 \`E stato preso in considerazione anche l'utilizzo di un orologio logico, in particolare quello proposto da Lamport. Tuttavia, data sia la struttura di rete, sia la direzione dei messaggi trasmessi (convergente verso il leader), l'utilizzo di timestamp generati da un processo centrale risulta pi\`u efficiente in termini di performance e numero di messaggi scambiati. L'implementazione dell'orologio logico di Lamport richiederebbe un continuo scambio di messaggi tra i nodi per mantenere i timestamp locali sincronizzati, con un overhead significativo. Al contrario, nella soluzione scelta non vi \`e necessit\`a di meccanismi di sincronizzazione e lo scambio di messaggi \`e limitato all'indispensabile: ad ogni nuova richiesta di operazione da un nodo, vengono trasmessi nella rete solo 2 messaggi, ovvero la richiesta di un nuovo record evento e la risposta contenente esso.
 
-Come descritto nel dettaglio nella precedente sezione \ref{sec
-} sulla comunicazione, ogni richiesta confluisce verso il leader e il sistema di request-response basato su ACK \`e implementato unicamente tra due nodi direttamente comunicanti. L'utilizzo dell'orologio logico di Lamport, senza l'aggiunta di messaggi di risposta in direzione contraria, causerebbe col tempo un disallineamento tra i timestamp dei nodi meno attivi e quelli del leader, rendendo le loro richieste sempre pi\`u obsolete e infine scartate.
+Come descritto nel dettaglio nella precedente sezione \ref{subsec:ack} sulla comunicazione, ogni richiesta confluisce verso il leader e il sistema di request-response basato su ACK \`e implementato unicamente tra due nodi direttamente comunicanti. L'utilizzo dell'orologio logico di Lamport, senza l'aggiunta di messaggi di risposta in direzione contraria, causerebbe col tempo un disallineamento tra i timestamp dei nodi meno attivi e quelli del leader, rendendo le loro richieste sempre pi\`u obsolete e infine scartate.
 
 Inoltre, l'orologio logico di Lamport risulterebbe problematico per un ordinamento globale delle operazioni all'interno del log, poiché ogni cluster sarebbe temporalmente indipendente dagli altri, legato al numero di richieste ricevute dal proprio leader.
 
@@ -587,7 +585,7 @@ Questo meccanismo previene eventuali inconsistenze dovute all'ordine fuori sincr
 Quando un leader riceve una richiesta di cambio colore o di merge con un timestamp troppo vecchio rispetto all'ultima operazione completata (Figura \ref{fig:caso_too_old}):
 
 \begin{itemize}
-    \item La richiesta viene ignorata (''droppata'') poiché il suo stato \`e ormai obsoleto rispetto alle operazioni più recenti.
+    \item La richiesta viene ignorata (``droppata'') poiché il suo stato \`e ormai obsoleto rispetto alle operazioni più recenti.
 \end{itemize}
 
 Questo assicura che non vengano applicate modifiche non più pertinenti, evitando di introdurre inconsistenze nel sistema.
@@ -639,7 +637,7 @@ Questo approccio garantisce che il sistema mantenga uno stato consistente e ridu
 
 La robustezza del sistema dipende dalla capacit\`a di gestire efficacemente i fallimenti dei nodi, sia leader che normali. Di seguito vengono dettagliate le strategie adottate per ricalcolare la struttura del cluster in caso di fallimenti, con particolare attenzione ai casi limite.
 
-\subsubsection{1. Fallimento di un nodo leader}
+\subsubsection{Fallimento di un nodo leader}
 \label{subsubsec:fallimento_leader}
 Il leader di un cluster \`e fondamentale per la coordinazione e la comunicazione all'interno del cluster stesso. Tuttavia, il fallimento di un leader pu\`o generare scenari complessi, come la formazione di sotto-grafi disconnessi. Il sistema deve quindi gestire efficacemente tali situazioni per garantire la continuit\`a operativa e la coerenza del cluster.
 
@@ -649,14 +647,13 @@ Il leader di un cluster \`e fondamentale per la coordinazione e la comunicazione
     \item \textbf{Gestione del partizionamento in sotto-grafi}:
     \begin{itemize}
         \item Quando un leader fallisce, il server elegge il nodo con l'\texttt{id} pi\`u basso rimasto e lo nomina come nuovo leader. 
-        \item Il nuovo leader avvia una BFS per ristabilire la struttura gerarchica del suo sotto-grafo e comunica al server i nodi che fanno parte del sotto-grafo rimanente.
+        \item Il nuovo leader utilizza l'algoritmo di scoperta utilizzato nel setup~(\ref{subsec:setup}) per ristabilire la struttura gerarchica del suo sotto-grafo e comunica al server i nodi che fanno parte del sotto-grafo rimanente.
         \item Il server controlla se ci sono nodi non inclusi nel nuovo sotto-grafo e, per ogni gruppo di nodi sconnessi, elegge altri nuovi leader per gestire i restanti sotto-grafi.
         \item Il processo continua finché tutti i nodi disconnessi non vengono riassegnati a un leader e il cluster non \`e completamente ripristinato.
     \end{itemize}
     \item \textbf{Ricostruzione della struttura del cluster}:
     \begin{itemize}
-        \item Durante la BFS, ogni nodo del sotto-grafo riassegnato aggiorna il proprio \texttt{leaderID} con quello del nuovo leader.
-        \item Vengono sistemate le relazioni di \texttt{parent} e \texttt{child} tra i nodi per garantire la connessione all'interno del sotto-grafo.
+        \item Durante l'algoritmo di scoperta, ogni nodo del sotto-grafo riassegnato aggiorna il proprio \texttt{leaderID} con quello del nuovo leader. 
         \item Vengono comunicati eventuali cluster adiacenti al nuovo leader in modo che possa aggiornare la rete overlay.
     \end{itemize}
 \end{itemize}
@@ -668,43 +665,6 @@ Il leader di un cluster \`e fondamentale per la coordinazione e la comunicazione
     \item \textit{Inconsistenze durante l'elezione}: per evitare condizioni di competizione (\textit{race conditions}), i nodi seguono una politica deterministica basata sull'\texttt{id} pi\`u basso per eleggere il nuovo leader in ciascun sotto-grafo.
 \end{itemize}
 
-\subsubsection{2. Fallimento di un nodo normale}
-\label{subsubsec:fallimento_nodo_normale}
-Il fallimento di un nodo non leader pu\`o avere impatti diversi sulla struttura del cluster, a seconda del ruolo del nodo e della sua posizione all'interno dell'albero di comunicazione.
-
-\begin{itemize}
-    \item \textbf{Nodo foglia}: se il nodo fallito \`e una foglia, il suo fallimento non interrompe la comunicazione tra gli altri nodi del cluster. Nessuna azione \`e necessaria.
-    
-    \item \textbf{Nodo interno}: se il nodo \`e interno e il suo fallimento interrompe la comunicazione tra parti del cluster, \`e necessario ricalcolare la struttura per ristabilire la connettivit\`a. Questo processo coinvolge diverse fasi dettagliate di seguito.
-
-    \newpage
-    \begin{enumerate}
-        \item \textbf{Rilevamento del fallimento}:
-        \begin{itemize}
-            \item \textbf{Tentativi di comunicazione}: il nodo figlio del nodo fallito tenta di comunicare con il proprio \texttt{parent} per operazioni periodiche (ad esempio, messaggi di \texttt{heartbeat}) o in risposta a eventi specifici (come richieste di cambio colore).
-            \item \textbf{Timeout e assunzione di fallimento}: se il nodo figlio non riceve risposta dopo un certo numero di tentativi, utilizzando meccanismi di \texttt{ack} (acknowledgment) e un intervallo di \textit{timeout}, assume che il \texttt{parent} sia fallito.
-        \end{itemize}
-        
-        \item \textbf{Inizio della prima BFS (riconfigurazione)}:
-        \begin{itemize}
-            \item \textbf{Avvio di una BFS locale}: il nodo figlio avvia una \textit{Breadth-First Search} (BFS) per esplorare i nodi raggiungibili con lo stesso \texttt{leaderID}, inviando messaggi di \texttt{BFS\_Request} ai propri vicini. L'obiettivo \`e capire se esiste un percorso alternativo per raggiungere il leader originale.
-            \item \textbf{Tracciamento delle richieste}: Durante la BFS, ogni nodo che riceve un \texttt{BFS\_Request} si segna da quale nodo \`e arrivata la richiesta, così da poter ripercorrere all'indietro il percorso seguito dalla richiesta una volta trovato un nodo connesso al leader.
-        \end{itemize}
-        
-        \item \textbf{Analisi dei risultati della prima BFS}:
-        \begin{enumerate}
-            \item \textbf{Caso 1 - Cluster non isolato (leader raggiungibile)}: se la BFS raggiunge il leader originale il percorso seguito dalla prima BFS viene ripercorso all'indietro, aggiornando solo i nodi coinvolti direttamente nella ricostruzione del percorso e ristabilendo la connessione al nodo sconnesso aggiornando i \texttt{parent} dei nodi.
-
-            \item \textbf{Caso 2 - Cluster isolato (leader non raggiungibile)}: se la BFS non trova alcun percorso per raggiungere il leader originale, significa che il sotto-grafo \`e diventato isolato dal cluster principale. Il nodo che ha avviato la BFS attende prima di avviare altre azioni:
-            \begin{itemize}
-                \item \textbf{Attesa delle risposte}: il nodo attende di ricevere risposte da tutti i nodi raggiunti dalla BFS. Se nessuno dei nodi risponde di essere collegato al leader, il nodo si autoproclama leader.
-                \item \textbf{Avvio della seconda BFS (nuovo leader)}: una volta autoproclamato leader, il nodo avvia una seconda BFS per informare tutti i nodi del sotto-grafo che \`e diventato il nuovo leader.
-                \item \textbf{Aggiornamento dei nodi}: tutti i nodi raggiunti dalla BFS aggiornano il proprio \texttt{leaderID} con quello del nuovo leader.
-                \item \textbf{Comunicazione al server}: il nuovo leader invia un messaggio di \\ \texttt{NewLeaderAnnouncement} al server, informandolo della formazione del nuovo cluster e fornendo la lista dei nodi coinvolti.
-            \end{itemize}
-        \end{enumerate}
-    \end{enumerate}
-\end{itemize}
 
 \subsection{Criteri di selezione del leader}
 
@@ -712,7 +672,7 @@ In un sistema distribuito come quello descritto, la selezione di un leader all'i
 
 \subsubsection{Attribuzione dell'ID ai nodi}
 
-Ogni nodo nel sistema rappresenta un pixel di una matrice bidimensionale, e a ciascun nodo viene assegnato un identificatore unico (ID). Per generare l'ID dei nodi, si utilizzano le coordinate del pixel \texttt{(x, y)} all'interno della matrice. Esistono diversi metodi per attribuire un ID:
+Ogni nodo nel sistema rappresenta un pixel di una matrice bidimensionale, e a ciascun nodo viene assegnato un identificatore unico (ID). Esistono diversi metodi per attribuire un ID:
 
 \begin{itemize}
     \item \textbf{Utilizzo delle coordinate \texttt{(x, y)}}: le coordinate stesse possono essere utilizzate come identificatore. In questo caso, l'ID del nodo sar\`a la coppia \texttt{(x, y)}, che rappresenta la posizione esatta del nodo nella matrice.
@@ -723,7 +683,7 @@ Ogni nodo nel sistema rappresenta un pixel di una matrice bidimensionale, e a ci
     \]
     dove $larghezza$ \`e il numero di colonne della matrice. Questa rappresentazione permette di gestire pi\`u facilmente i nodi come valori interi unici.
 
-    \item \textbf{Utilizzo dell'id del processo}: nello scenario di un sistema distribuito come questo, ogni nodo viene gestito come un processo a s\`e stante ed \`e possibile utilizzare l'id del processo come identificatore del nodo stesso.
+    \item \textbf{Utilizzo dell'id del processo}: nello scenario di un sistema distribuito come questo, ogni nodo viene gestito come un processo a s\`e stante ed \`e possibile utilizzare il pid del processo come identificatore del nodo stesso.
 
 \end{itemize}
 
@@ -731,14 +691,13 @@ Nel sistema proposto \`e stato scelto di utilizzare la terza soluzione, in quant
 
 \subsubsection{Selezione del leader}
 
-Come descritto nella sezione sul meccanismo di setup~(\ref{subsec:setup}), la matrice di nodi viene scansionata seguendo un ordine crescente delle coordinate \texttt{x} e \texttt{y} a partire dalla posizione $(0,0)$.
-Inoltre, ogni nodo non ancora visitato che inizia l'algoritmo di scoperta del cluster viene eletto a leader, pertanto per ogni cluster di nodi, il leader sar\`a il nodo con coordinate \texttt{x} e \texttt{y} (e di conseguenza ID) pi\`u basse tra i nodi del cluster stesso.
+Come descritto nella sezione sul meccanismo di setup~(\ref{subsec:setup}), la matrice di nodi viene scansionata seguendo l'ordine crescente delle coordinate \texttt{x} e \texttt{y}, partendo dalla posizione $(0,0)$. Ogni nodo non ancora visitato che inizia l'algoritmo di scoperta del cluster viene eletto come leader, per cui il leader di ciascun cluster sarà il nodo con le coordinate \texttt{x} e \texttt{y} (e l'ID) più basse all'interno del cluster.
 
-Differente \`e invece la gestione del leader nelle operazioni di merge. Per mantenere la complessit\`a al minimo e le operazioni pi\`u ``naturali'' possibili, si \`e deciso di tenere come leader del nuovo cluster unito dopo il merge, il leader del cluster che ha cambiato colore/che ha fatto richiesta al server per primo per l'operazione di merge.
-Questa soluzione rimuove la complessit\`a aggiuntiva di dover confrontare l'id per mantenere il minore ed inoltre si presta ad essere pi\`u naturale per il sistema, sia da un punto di vista di priorit\`a della richiesta (minor timestamp) e quindi rimanendo in linea con le altre scelte implementative prese, sia per una correttezza logica. Un cluster viene considerato molto attivo quando vengono effettuate molte operazioni di cambio colore e considerando che ogni nodo della matrice ha la stessa probabilit\`a di essere scelto, una maggiore attivit\`a implica probabilisticamente una dimensione maggiore del cluster (i.e. pi\`u nodi al suo interno). Unendo i cluster adiacenti che condividono il colore col cluster che effettua la richiesta di merge per primo, significa che probabilisticamente si stanno unendo cluster di dimensione minore con uno maggiore e ci\`o implica un minor numero di operazioni di aggiornamento delle strutture dati.
+Nelle operazioni di merge, la gestione del leader segue una logica diversa. Per mantenere il sistema semplice e coerente con le scelte implementative, è stato deciso di designare come leader del nuovo cluster unito il leader del cluster che ha avviato per primo il cambio colore o che ha inoltrato la richiesta di merge al server. Questo approccio elimina la necessità di confrontare gli ID dei leader e rende il processo più naturale. Poiché un cluster attivo, con frequenti operazioni di cambio colore, ha maggiori probabilità di espandersi, l'assegnazione del ruolo di leader al cluster più attivo tende a favorire l'unione di cluster minori con cluster maggiori. Questo porta a un minor numero di aggiornamenti delle strutture dati e riduce la complessità complessiva.
 
 \paragraph{Failover e rielezione}
-Nel caso in cui il leader selezionato fallisca, \`e previsto un meccanismo di failover automatico, che garantisce che il cluster possa continuare a funzionare correttamente anche in presenza di guasti. I nodi del cluster avviano un'elezione per scegliere un nuovo leader, basata nuovamente sul criterio dell'ID pi\`u basso tra i nodi rimanenti. Per la rielezione questa scelta si presta per essere la pi\`u conveniente in quanto la lista dei nodi nel cluster (\texttt{cluster\_nodes}) \`e ordinata crescentemente, pertanto \`e semplicemente necessario estrarre il primo nodo della lista. Inoltre se vediamo il fallimento di un leader come fallimento dell'intero cluster in quanto suo rappresentante, l'operazione di rielezione \`e al pari di operazione di setup di un singolo cluster, rispettando cos\`i le precedenti scelte implementative.
+In caso di fallimento del leader, è previsto un meccanismo di failover automatico che assicura la continuità operativa del cluster anche in presenza di guasti. Viene selezionato un nuovo leader tra i nodi rimanenti del cluster, scegliendo quello con l'ID più basso. Questa scelta è ottimale poiché la lista dei nodi nel cluster (\texttt{cluster\_nodes}) è ordinata in modo crescente, consentendo di estrarre facilmente il primo nodo della lista. Inoltre, considerando il fallimento del leader come una rappresentazione dell'intero cluster, l'operazione di rielezione segue la stessa logica del setup iniziale, garantendo coerenza con le scelte implementative.
+
 
 \subsection{Vantaggi della soluzione proposta}
 
@@ -767,9 +726,9 @@ Una volta che la comunicazione base \`e stabilita, viene implementato l'algoritm
 
 Nella terza fase, viene sviluppato l'algoritmo di merge, che gestisce la fusione di cluster adiacenti quando questi acquisiscono lo stesso colore. L'algoritmo deve garantire che i leader dei cluster coinvolti collaborino per eseguire l'unione in maniera efficiente e consistente.
 
-\subsection*{Fase 4: Implementazione del server di gestione del tempo e server centrale}
+\subsection*{Fase 4: Implementazione del server centrale}
 
-In questa fase, viene implementato un server centrale che gestisce i timestamp e coordina le operazioni tra i cluster. Il server avr\`a il compito di mantenere una visione globale dello stato del sistema e garantire che gli eventi vengano ordinati correttamente nel tempo, migliorando così la coerenza globale.
+In questa fase, viene implementato un server centrale che coordina le operazioni tra i cluster e server avr\`a il compito sia di mantenere una visione globale dello stato del sistema sia di garantire che gli eventi vengano ordinati correttamente nel tempo, migliorando così la coerenza globale.
 
 \subsection*{Fase 5: Gestione della consistenza globale}
 
@@ -786,6 +745,10 @@ La soluzione proposta, basata sul trattamento dei cluster come nodi in un grafo 
 \newpage
 
 \chapter{Implementazione}
+
+Tutto il codice sviluppato per questo progetto è stato caricato in una repository GitHub pubblica, disponibile al seguente link:
+\url{https://github.com/Crisis82/Distributed-Flood-Fill/tree/master}. La repository contiene il codice sorgente, gli script per il testing, e tutti i file necessari per la configurazione e l'esecuzione del sistema distribuito.
+
 
 \section{Linguaggi di programmazione utilizzati}
 
@@ -848,7 +811,7 @@ Questo comando compila e avvia il backend, configurando una griglia di nodi e as
 
 \noindent Dove:
 \begin{itemize}
-\item \texttt{<ROWS> <COLUMNS>} sono le dimensioni della griglia (ad esempio, 7 7 per una griglia 7x7).
+\item \texttt{<ROWS> <COLUMNS>} sono le dimensioni della griglia (ad esempio, 7 7 per una griglia $7\times7$).
 \item \texttt{<FROM\_FILE>} specifica se i colori dei nodi devono essere letti da un file (\texttt{True}) o generati casualmente (\texttt{False}).
 \end{itemize}
 
@@ -908,13 +871,15 @@ Il record \texttt{node} rappresenta ciascun nodo del sistema. Contiene campi per
 
 \begin{tcolorbox}[title=Definizione del record \texttt{node}]
 \begin{verbatim}
-  -record(node, {pid, x, y, leaderID, neighbors = []}).
+  -record(node, {pid, x, y, parent, children, leaderID, neighbors = []}).
 \end{verbatim}
 \end{tcolorbox}
 
 \begin{itemize}
     \item \textbf{pid}: identificatore del processo Erlang associato al nodo.
     \item \textbf{x, y}: coordinate del nodo nella griglia.
+    \item \textbf{parent}: campo utilizzato nell'algoritmo di visita. Identifica il nodo da cui proviene la richiesta di visita.
+    \item \textbf{children}: campo utilizzato nell'algoritmo di visita. Corrisponde ai vicini non ancora visitati che condividono il colore. \`E un sottoinsieme della lista \texttt{neighbors}.
     \item \textbf{leaderID}: pid del leader del cluster a cui il nodo appartiene.
     \item \textbf{neighbors}: lista dei pid dei nodi fisicamente adiacenti.
 \end{itemize}
@@ -926,7 +891,8 @@ Il record \texttt{leader} rappresenta i leader dei cluster, gestendo l’aggrega
 \begin{tcolorbox}[title=Definizione del record \texttt{leader}]
 \begin{verbatim}
   -record(leader, {
-      node, color, last\_event, adj\_clusters = [], cluster\_nodes = []
+      node, color, last_event, serverID,
+      adj_clusters = [], cluster_nodes = [], merge_in_progress
     }).
 \end{verbatim}
 \end{tcolorbox}
@@ -935,8 +901,10 @@ Il record \texttt{leader} rappresenta i leader dei cluster, gestendo l’aggrega
     \item \textbf{node}: struttura dati del nodo leader.
     \item \textbf{color}: colore del cluster.
     \item \textbf{last\_event}: informazioni sull'ultima operazione eseguita sul cluster.
+    \item \textbf{serverID}: l'identificatore del processo del server centrale.
     \item \textbf{adj\_clusters}: lista dei cluster adiacenti.
     \item \textbf{cluster\_nodes}: lista dei pid dei nodi appartenenti al cluster.
+    \item \textbf{merge\_in\_progress}: booleano che attesta se il leader del cluster sta gi\`a eseguendo un'operazione di merge.
 \end{itemize}
 
 \subsection{\texttt{event.hrl}}
@@ -970,7 +938,7 @@ Il modulo contiene le seguenti funzioni principali:
 
     \item \texttt{new\_leader/5}: crea e configura un nodo come leader. Un leader coordina i nodi all'interno di un cluster, assegnandosi il proprio PID come leader ID. La funzione inizializza inoltre attributi specifici come il colore del cluster e le informazioni sui cluster adiacenti.
 
-    \item \texttt{create\_node/2}: avvia il processo per un nodo leader, aggiornando il suo PID e garantendo che possa comunicare con gli altri nodi della rete. Questa funzione spawna un processo per il ciclo di vita del nodo, rendendolo operativo.
+    \item \texttt{create\_node/2}: avvia il processo per un nodo, aggiornando il suo PID e garantendo che possa comunicare con gli altri nodi della rete. Questa funzione spawna un processo per il ciclo di vita del nodo, rendendolo operativo.
 
     \item \texttt{leader\_loop/1}: \`e il ciclo principale del leader. Questa funzione permette al leader di ricevere e gestire continuamente i messaggi, garantendo una risposta reattiva agli eventi che si verificano nella rete, come aggiornamenti di cluster o cambiamenti di colore.
 
@@ -978,8 +946,6 @@ Il modulo contiene le seguenti funzioni principali:
 
 \end{itemize}
 
-\noindent
-Lo scopo del modulo \texttt{node.erl} \`e fornire una struttura robusta per la gestione di una rete distribuita di nodi, dove ciascun nodo può essere configurato come nodo standard o leader. La flessibilità del modulo consente di implementare dinamicamente una rete in cui i nodi possono cambiare colore, coordinarsi con i leader e gestire le proprie interazioni in modo distribuito. Questo modulo abilita la gestione dinamica dei cluster e la resilienza a eventuali errori o modifiche, come l'elezione di nuovi leader e la fusione di cluster adiacenti. In questo modo, \`e possibile mantenere la consistenza dei colori e la corretta organizzazione dei nodi anche in scenari complessi.
 
 \subsection{\texttt{event.erl}}
 
@@ -1000,7 +966,7 @@ Le principali funzioni del modulo sono le seguenti:
 \begin{itemize}
     \item \texttt{new/3}: crea un nuovo evento con il timestamp attuale. Gli attributi dell'evento includono il tipo, il colore e il leader che ha originato l'evento. Questa funzione \`e utilizzata per la generazione di eventi in tempo reale.
 
-    \item \texttt{new\_with\_timestamp/4}: consente la creazione di un evento con un timestamp specificato, utile in contesti di testing o per ricostruire eventi passati. L'evento conserva le stesse proprietà di \texttt{new/3}, ma accetta un timestamp definito dall'utente.
+    \item \texttt{new\_with\_timestamp/4}: consente la creazione di un evento con un timestamp specificato, utile in contesti di testing; l'evento conserva le stesse proprietà di \texttt{new/3}, ma accetta un timestamp definito dall'utente.
 
     \item \texttt{greater/2}: confronta due eventi per stabilire il loro ordine temporale. Se il primo evento ha un timestamp più recente del secondo, viene considerato ``maggiore''. In caso di parità di timestamp, l'ID unico dell'evento \`e usato per determinare l'ordine. Questa funzione \`e essenziale per gestire correttamente la sequenza degli eventi nel sistema distribuito.
 
@@ -1036,12 +1002,9 @@ Le principali funzioni del modulo sono le seguenti:
 
     \item \texttt{promote\_to\_leader/5}: promuove un nodo a leader, inizializzando le sue informazioni di cluster e di adiacenza. \`e una funzione di recupero fondamentale per garantire che i cluster rimangano operativi anche in caso di guasti.
 
-    \item \texttt{send\_periodic\_updates/1} e \texttt{broadcast\_leader\_update/1}: invia periodicamente aggiornamenti sul colore e sul leader corrente a tutti i nodi del cluster e ai cluster adiacenti, garantendo una sincronizzazione continua delle informazioni.
+    \item \texttt{send\_periodic\_updates/1} e \texttt{broadcast\_leader\_update/1}: invia periodicamente aggiornamenti sul leader corrente a tutti i nodi del cluster e ai cluster adiacenti, garantendo una sincronizzazione continua delle informazioni.
 
 \end{itemize}
-
-\noindent
-Il modulo \texttt{operation.erl} \`e essenziale per il mantenimento dell'integrità e della coerenza di un sistema distribuito basato su cluster, gestendo in modo dinamico i colori dei cluster, la fusione tra cluster adiacenti e il recupero da guasti dei leader. Grazie alle sue funzioni, il sistema può adattarsi ai cambiamenti e mantenere una rete di comunicazione affidabile tra i cluster.
 
 \subsection{\texttt{server.erl}}
 
@@ -1249,7 +1212,7 @@ Il file \texttt{generate\_changes\_rand.py} \`e un utile script Python progettat
 
 \subsection{\texttt{script.py}}\label{sec:script}
 
-Il file \texttt{script.py} \`e un script Python utilizzato per gestire e testare una griglia di nodi in un sistema distribuito. Lo script \`e particolarmente utile per verificare la reattività e la coerenza del sistema durante operazioni di cambio colore e condizioni di merge. Comunica con un server Erlang tramite TCP, consentendo di inviare richieste di cambio colore ai nodi e di eseguire scenari di test specifici per analizzare la stabilità del sistema in caso di aggiornamenti simultanei o condizioni temporali complesse.
+Il file \texttt{script.py} \`e un script Python utilizzato per gestire e testare una griglia di nodi in un sistema distribuito. Lo script \`e particolarmente utile per verificare la coerenza del sistema durante specifiche operazioni di cambio colore e condizioni di merge. Comunica con un server Erlang tramite TCP, consentendo di inviare richieste di cambio colore ai nodi e di eseguire scenari di test specifici per analizzare la stabilità del sistema in caso di aggiornamenti simultanei o condizioni temporali complesse.
 
 \paragraph{Funzionalit\`a principali:}
 \begin{itemize}
@@ -1337,7 +1300,7 @@ I test del sistema distribuito sono stati eseguiti sulle seguenti macchine:
         CPU & Intel Core i7-12700K & AMD Ryzen 5 3600 \\
         GPU & NVIDIA GeForce RTX 3070 & NVIDIA GeForce RTX 2060 \\
         RAM & 32GB & 16GB \\
-        OS & Windows 10 x64 & Void Linux x86\_64 \\
+        OS & Windows 10 x64 (testato su WSL) & Void Linux x86\_64 \\
     \end{tabular}
     \label{tab:env}
 \end{table}
@@ -1372,12 +1335,16 @@ Sono stati testati i seguenti requisiti:
 
 \subsection{Risultati}
 
+
+
 I test sono stati divisi in tre fasi:
 \begin{enumerate}
     \item la prima focalizzata sulla simulazione di un ambiente reale attraverso la generazione di eventi randomici, sia per quanto riguarda il colore scelto ed il nodo, che per i timestamp delle operazioni.
     \item la seconda implementata per la verifica di serie particolari di eventi, casi di concorrenza o casi limite.
     \item l'ultima per il controllo del corretto funzionamento in presenza di casi di fallimento
 \end{enumerate} 
+
+I risultati dei test condotti sono documentati attraverso una serie di video disponibili nella repository, nella cartella \texttt{/media/Video}, che mostrano diverse prove eseguite sul sistema
 
 \subsubsection{1) Test randomici}
 
@@ -1398,16 +1365,18 @@ Dato il periodo limitato per lo sviluppo del sistema, non \`e stato possibile co
 Va comunque osservato che il sistema \`e stato testato in diversi scenari e su macchine differenti e non si sono verificati mai casi di malfunzionamenti o comportamenti imprevisti del sistema distribuito implementato, pertanto possiamo confermare la generica robustezza del sistema.
 La mancanza di test ad-hoc per le casistiche di fallimento non implica che non siano stati implementati i meccanismi di recovery descritti nella sezione~\ref{subsec:gestione_fallimenti}, ma unicamente che non \`e stato possibile implementare dei test che verificassero individualmente i vari casi di failure.
 
+
+
+
 \subsection{Osservazioni}
 
-Per motivi di tempistiche non \`e stato possibile approfondire i test sulle performance, ne ad eseguire delle ottimizzazioni alla fase di setup. Come anche osservato in \ref{subsec:setup}, le performance del setup peggiorano esponenzialmente al crescere delle dimensioni della matrice e non si \`e potuto terminare alcun test che lavorasse su dimensioni al di sopra dei $30 \times 30$, per colpa di crash della macchina stessa. Indubbiamente con ulteriori ottimizzazioni nella fase di setup si potrebbe limitare la crescit\`a esponenziale delle risorse utilizzate, tuttavia va anche osservato che i test sono stati condotti su singole macchine, mentre il sistema \`e stato sviluppato per essere eseguito in maniera distribuita.
+Per motivi di tempistiche non \`e stato possibile approfondire i test sulle performance, ne ad eseguire delle ottimizzazioni alla fase di setup. Come anche osservato in \ref{subsec:setup}, le performance del setup peggiorano al crescere delle dimensioni della matrice e non si \`e potuto terminare alcun test che lavorasse su dimensioni al di sopra dei $30 \times 30$, per colpa di crash della macchina stessa. Indubbiamente con ulteriori ottimizzazioni nella fase di setup si potrebbe limitare la crescit\`a delle risorse utilizzate, tuttavia va anche osservato che i test sono stati condotti su singole macchine, mentre il sistema \`e stato sviluppato per essere eseguito in maniera distribuita.
 
 \chapter{Conclusioni}
 
-In conclusione, il progetto descritto in questa documentazione si adatta perfettamente al problema del \textit{Flood-Fill} (vedi sezione~\ref{sec:descrizione_problema}) e come descritto nei casi di test, mostrato nei video allegati e come \`e possibile riverificare col codice fornito, il sistema distribuito implementato rispecchia le richieste presentate dal problema.
-La soluzione implementativa proposta spicca per robustezza nei casi di concorrenza in quanto come descritto ogni caso \`e stato analizzato e verificato in profondit\`a.
-Nonostante siano stati apportati minori cambiamenti rispetto alle decisioni iniziali nella struttura, possiamo affermare con certezza che la fase iniziale di analisi e progettazione del sistema si sia rivelata decisiva e sia stata individuata una soluzione corretta. Questo si \`e dimostrato un aspetto fondamentale per il completamento del progetto nei tempi previsti, senza lasciare nulla da parte.
-Questo non implica che il progetto sia perfetto, in quanto siamo consci delle limitazioni in termini di complessit\`a delle performance, tuttavia lo sviluppo di un algoritmo ottimizzato per la fase di setup avrebbe dilatato troppo le tempistiche di consegna. Si \`e deciso quindi di dare la priotit\`a al rispetto dei requisiti descritti, alla correttezza del funzionamento, alla completezza dei test e alle tempistiche di consegna.
+In conclusione, il progetto descritto in questa documentazione affronta in modo efficace il problema del \textit{Flood-Fill} (vedi sezione~\ref{sec:descrizione_problema}). Come evidenziato dai casi di test e dai video allegati, nonché dal codice fornito, il sistema distribuito implementato soddisfa i requisiti specificati. La soluzione proposta si distingue per la robustezza nella gestione della concorrenza, grazie ad un'analisi approfondita e alla verifica dettagliata di ogni caso.
 
+Nonostante siano stati apportati alcuni cambiamenti minori rispetto alle decisioni iniziali, possiamo affermare che la fase di analisi e progettazione del sistema è stata determinante, permettendoci di individuare una soluzione corretta. Questo si \`e rivelato un fattore chiave per il completamento del progetto nei tempi previsti, garantendo la coerenza e la completezza del lavoro svolto.
 
+Sebbene il progetto presenti delle limitazioni in termini di complessità e performance, riteniamo che lo sviluppo di un algoritmo più ottimizzato per la fase di setup avrebbe comportato un prolungamento eccessivo delle tempistiche di consegna. Pertanto, abbiamo deciso di dare priorità alla conformità con i requisiti, alla correttezza del funzionamento, alla completezza dei test e al rispetto delle scadenze.
 \end{document}
