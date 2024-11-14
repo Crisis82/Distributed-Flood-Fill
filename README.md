@@ -115,6 +115,20 @@ Prima di iniziare, assicurati di avere installato:
     
     Il backend in Erlang gestisce le operazioni distribuite sui nodi della matrice, inclusi i cambiamenti di colore e la sincronizzazione dello stato dei nodi. È progettato per supportare una gestione efficiente dei messaggi tra i nodi, consentendo di rilevare e recuperare eventuali fallimenti dei nodi e dei leader.
     
+    - **Preparazione**:
+
+        Prima di eseguire il comando, assicurati che lo script abbia i permessi di esecuzione. Esegui:
+
+        ```bash
+        chmod +x ./compile_and_run.sh
+        ```
+
+        Se compare l’errore `bad interpreter: No such file or directory`, risolvi il problema con:
+
+        ```bash
+        sed -i 's/\r//' compile_and_run.sh
+        ```
+
     - **Comando**:
         
         ```bash
